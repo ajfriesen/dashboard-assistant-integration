@@ -46,6 +46,7 @@
     },
     "abort": {
       "already_configured": "This device is already configured",
+      "cannot_connect": "Couldn't reach the device to identify it — it may still be starting up. It will be rediscovered automatically.",
       "reauth_successful": "Re-authentication was successful",
       "wrong_device": "The token belongs to a different Dashboard Assistant device"
     }

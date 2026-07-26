@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
@@ -87,21 +88,30 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         self._port = discovery_info.port or DEFAULT_PORT
         self._name = discovery_info.name.removesuffix("._dashboard-assistant._tcp.local.")
 
-        # Key on the device's stable node id so every address it's discovered at
-        # (IPv4/IPv6/…) collapses to one entry, and a later DHCP address change
-        # updates that entry instead of adding a duplicate. Fall back to host:port
-        # if the device can't be reached during discovery.
-        unique_id = f"{self._host}:{self._port}"
-        try:
-            ident = await async_identify(
-                async_get_clientsession(self.hass), self._host, self._port
-            )
-        except DashboardAssistantError:
-            ident = None
-        if ident and ident.get("node_id"):
-            unique_id = ident["node_id"]
+        # Identify the device to key discovery on its stable node id — so every
+        # address it's announced at (IPv4/IPv6/…) and any later DHCP change map to
+        # one entry — and to title the card with its friendly name rather than the
+        # raw mDNS instance name ("Dashboard Assistant on <host>").
+        #
+        # The device's API can be briefly unready right at boot, so retry a little.
+        # If it still can't be reached, abort instead of falling back to an
+        # address-based id: an address-keyed flow would not de-duplicate against
+        # the node-id one, showing a spurious second card. HA re-fires discovery
+        # when the device re-announces.
+        ident = None
+        session = async_get_clientsession(self.hass)
+        for attempt in range(3):
+            try:
+                ident = await async_identify(session, self._host, self._port)
+                break
+            except DashboardAssistantError:
+                if attempt < 2:
+                    await asyncio.sleep(2)
+        if not ident or not ident.get("node_id"):
+            return self.async_abort(reason="cannot_connect")
 
-        await self.async_set_unique_id(unique_id)
+        self._name = ident.get("name") or self._name
+        await self.async_set_unique_id(ident["node_id"])
         self._abort_if_unique_id_configured(
             updates={CONF_HOST: self._host, CONF_PORT: self._port}
         )
