@@ -1,0 +1,13 @@
+{
+  "domain": "dashboard_assistant",
+  "name": "Dashboard Assistant",
+  "codeowners": ["@ajfriesen"],
+  "config_flow": true,
+  "documentation": "https://github.com/ajfriesen/dashboard-assistant",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/ajfriesen/dashboard-assistant/issues",
+  "requirements": [],
+  "version": "0.1.0",
+  "zeroconf": ["_dashboard-assistant._tcp.local."]
+}

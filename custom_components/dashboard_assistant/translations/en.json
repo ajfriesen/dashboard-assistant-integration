@@ -1,0 +1,53 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Dashboard Assistant",
+        "description": "Enter the address and API token of your Dashboard Assistant device. The token is shown on the device's Config → Info screen.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "token": "API token"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Dashboard Assistant",
+        "description": "Add {name}? Pair automatically so you don't have to copy the token, or enter it by hand.",
+        "menu_options": {
+          "pair": "Pair automatically (recommended)",
+          "manual": "Enter the token manually"
+        }
+      },
+      "pair": {
+        "title": "Pair with {name}",
+        "description": "Couldn't pair automatically. If this device is already set up, open **Config → Add to HA → Pair** on its screen, then retry. (A brand-new device pairs on its own.)",
+        "submit": "Retry"
+      },
+      "manual": {
+        "title": "Dashboard Assistant",
+        "description": "Enter the API token shown on {name}'s Config → Info screen.",
+        "data": {
+          "token": "API token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Dashboard Assistant",
+        "description": "The API token was rejected. Enter the current token from the device's Config → Info screen.",
+        "data": {
+          "token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid API token",
+      "pairing_closed": "The device isn't in pairing mode. On its screen, open Config → Add to HA and press Pair, then try again."
+    },
+    "abort": {
+      "already_configured": "This device is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "wrong_device": "The token belongs to a different Dashboard Assistant device"
+    }
+  }
+}
