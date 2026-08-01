@@ -179,6 +179,14 @@ class DashboardAssistantClient:
     async def async_power(self, action: str) -> None:
         await self._request("POST", "/power", {"action": action})
 
+    async def async_reset(self) -> None:
+        """Factory-reset the device: clear provisioning + reboot.
+
+        The device regenerates its API token on the next boot, so this entry
+        stops working afterwards — it must be removed and the device re-added.
+        """
+        await self._request("POST", "/reset")
+
     async def async_install_update(self) -> None:
         await self._request("POST", "/update")
 

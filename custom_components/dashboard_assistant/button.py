@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -19,12 +20,16 @@ from .coordinator import DashboardAssistantConfigEntry, DashboardAssistantCoordi
 from .entity import DashboardAssistantEntity
 from .provision import async_provision_kiosk_login
 
+_LOGGER = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, kw_only=True)
 class DashboardAssistantButtonDescription(ButtonEntityDescription):
     """Describes a button and the command it fires."""
 
     press_fn: Callable[[DashboardAssistantClient], Awaitable[object]]
+    warning: str | None = None
+    """Logged before the command fires, for destructive actions."""
 
 
 BUTTONS: tuple[DashboardAssistantButtonDescription, ...] = (
@@ -58,6 +63,18 @@ BUTTONS: tuple[DashboardAssistantButtonDescription, ...] = (
         icon="mdi:camera",
         press_fn=lambda client: client.async_take_screenshot(),
     ),
+    DashboardAssistantButtonDescription(
+        key="factory_reset",
+        name="Factory reset",
+        icon="mdi:restore-alert",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=lambda client: client.async_reset(),
+        warning=(
+            "Factory reset requested: the device will clear its provisioning and "
+            "regenerate its API token on reboot. This config entry will stop "
+            "working and must be removed and the device re-added."
+        ),
+    ),
 )
 
 
@@ -89,6 +106,8 @@ class DashboardAssistantButton(DashboardAssistantEntity, ButtonEntity):
         self.entity_description = description
 
     async def async_press(self) -> None:
+        if self.entity_description.warning:
+            _LOGGER.warning(self.entity_description.warning)
         result = await self.entity_description.press_fn(self.coordinator.client)
         # Page navigation returns a snapshot; power/screenshot do not.
         self.coordinator.apply_snapshot(result)
