@@ -25,9 +25,10 @@ MANUFACTURER = "Dashboard Assistant"
 # created, in the config entry data, so provisioning is idempotent across restarts
 # and the user can be cleaned up when the integration is removed.
 #
-# Every tablet's user shares this one display name (HA token-users have a single
-# visible name); the per-device long-lived token is labelled with the MAC instead,
-# so tablets stay distinguishable in the user's token list.
+# Base display name for the per-tablet kiosk user. provision.py names each user
+# after the device itself ("Dashboard Assistant (45299a)", matching the HA device
+# card) so displays are distinguishable in HA's user list, using this as the
+# fallback base when the device reports no name; the token carries the same label.
 KIOSK_USER_NAME = "Dashboard Assistant"
 CONF_KIOSK_USER_ID = "kiosk_user_id"
 CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"

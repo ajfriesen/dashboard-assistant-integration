@@ -45,14 +45,21 @@ async def async_provision_kiosk_login(
     exist, so repeated calls (restarts, the re-provision button) don't create
     duplicates. A fresh access token is minted each time and sent to the device.
     """
-    # The device's MAC labels this tablet's token so it's distinguishable from
-    # other tablets sharing the "Dashboard Assistant" user name.
+    # Give every tablet its own HA user so the user list makes it obvious which
+    # login belongs to which display. Reuse the device's own friendly name
+    # ("Dashboard Assistant (45299a)") — it already carries the short MAC suffix
+    # and matches the HA device card, so user and device line up at a glance. Fall
+    # back to the base name plus the short MAC (then the node id) if the device
+    # reports no name. The token carries the same label.
     info = await client.async_get_info()
-    mac = info.get("mac") or info.get("node_id") or "unknown"
-    token_label = f"{KIOSK_USER_NAME} {mac}"
+    mac = info.get("mac") or ""
+    mac_short = mac.replace(":", "")[-6:] or info.get("node_id") or "unknown"
+    user_name = info.get("name") or f"{KIOSK_USER_NAME} ({mac_short})"
+    token_label = user_name
 
-    # Reuse the recorded user if it still exists, else create a non-admin one
-    # sharing the "Dashboard Assistant" display name.
+    # Reuse the recorded user if it still exists, else create a non-admin one.
+    # When reusing, keep its name in sync with the MAC-based name so tablets that
+    # were provisioned under the old shared name get migrated on the next run.
     user = None
     if user_id := entry.data.get(CONF_KIOSK_USER_ID):
         user = await hass.auth.async_get_user(user_id)
@@ -60,8 +67,10 @@ async def async_provision_kiosk_login(
         # async_create_user makes the user active on its own — it takes no
         # is_active kwarg (passing one raises TypeError).
         user = await hass.auth.async_create_user(
-            KIOSK_USER_NAME, group_ids=[GROUP_ID_USER]
+            user_name, group_ids=[GROUP_ID_USER]
         )
+    elif user.name != user_name:
+        await hass.auth.async_update_user(user, name=user_name)
 
     # Reuse the recorded long-lived refresh token if it still exists, else create
     # one, labelled with the MAC. The access token below is derived from it and is
