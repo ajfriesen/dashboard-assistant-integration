@@ -8,6 +8,13 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.1.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0...v0.1.0-rc.1) (2026-08-03)
+
+
+### Miscellaneous Chores
+
+* release 0.1.0-rc.1 ([bd8e02e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/bd8e02ecc66b812710f181dcea8be74ddc226334))
+
 ## [0.1.0] - 2026-08-03
 
 ### Added
