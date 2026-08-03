@@ -26,19 +26,64 @@ a fallback (`local_push`).
 
 ## Installation (HACS)
 
-1. In HACS, add this repository as a **custom repository** (category: *Integration*):
-   `https://github.com/ajfriesen/dashboard-assistant`.
-2. Install **Dashboard Assistant** and restart Home Assistant.
-3. Home Assistant should auto-discover the kiosk over mDNS — or add it manually
-   via **Settings → Devices & services → Add integration → Dashboard Assistant**.
-4. When prompted, enter the **API token** shown on the device's
-   **Config → Info** screen (and the host/port if adding manually — the API
-   defaults to port `8081`).
+This integration isn't in the default HACS store, so it's added as a **custom
+repository**. You only do this once; updates then show up in HACS like any other.
+
+### Prerequisites
+
+- A running Home Assistant instance you can reach in a browser.
+- [HACS](https://hacs.xyz/) installed and set up. If you don't have it yet,
+  follow the official [HACS installation guide](https://hacs.xyz/docs/use/download/download/).
+
+### 1. Add the custom repository
+
+1. In Home Assistant, open **HACS** from the sidebar.
+2. Click the **⋮** menu in the top-right corner and choose **Custom repositories**.
+3. In the **Repository** field, paste:
+
+   ```
+   https://github.com/ajfriesen/dashboard-assistant-integration
+   ```
+
+4. Set **Type** (or **Category**) to **Integration**.
+5. Click **Add**, then close the dialog.
+
+### 2. Install the integration
+
+1. Back in HACS, search for **Dashboard Assistant**.
+2. Open it and click **Download** (choose the latest version).
+3. **Restart Home Assistant** when prompted
+   (**Settings → System → Restart**). HACS only copies the files; Home
+   Assistant loads the integration on restart.
+
+### 3. Add the device
+
+After the restart, Home Assistant should **auto-discover** the kiosk over mDNS —
+you'll see a "Dashboard Assistant" discovered card under
+**Settings → Devices & services**. If it doesn't appear, add it manually:
+
+1. Go to **Settings → Devices & services → Add integration**.
+2. Search for **Dashboard Assistant** and select it.
+3. Enter the connection details:
+   - **API token** — shown on the device's **Config → Info** screen.
+   - **Host / port** (manual setup only) — the device's IP or hostname; the API
+     defaults to port **8081**.
+4. Submit. The kiosk appears as a single device with all its entities.
+
+### Updating
+
+When a new release is published, HACS shows an update on the **Dashboard
+Assistant** card. Click **Update**, then restart Home Assistant.
 
 ## Manual installation
 
-Copy `custom_components/dashboard_assistant` into your Home Assistant
-`config/custom_components/` directory and restart.
+If you'd rather not use HACS, copy the integration in by hand:
+
+1. Copy the `custom_components/dashboard_assistant` folder from this repository
+   into your Home Assistant `config/custom_components/` directory (create the
+   `custom_components` folder if it doesn't exist).
+2. Restart Home Assistant.
+3. Add the device as described in [step 3](#3-add-the-device) above.
 
 ## How it connects
 
