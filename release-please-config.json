@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "faeb7a7a4ee3f89a43431152e7a9ac5575a7f408",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "dashboard-assistant-integration",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "custom_components/dashboard_assistant/manifest.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

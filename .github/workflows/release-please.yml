@@ -1,0 +1,28 @@
+name: release-please
+
+# Automates versioning + releases from Conventional Commit messages. It reads the
+# commit history on `main` — so it picks up commits pushed straight to main *and*
+# commits that arrive via a merged branch/PR, as long as the message follows the
+# feat:/fix:/… convention.
+#
+# On every push to main it opens/updates a single "release PR" (titled e.g.
+# "chore(main): release 0.2.0") that bumps CHANGELOG.md and manifest.json. Merging
+# that PR is the release: it creates the vX.Y.Z tag and the GitHub Release, with
+# manifest.json already carrying the matching version (so HACS installs the right
+# one). Nothing to tag or bump by hand.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # create the release PR, tag and GitHub Release
+  pull-requests: write # open/update the release PR
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
