@@ -176,6 +176,9 @@ class DashboardAssistantClient:
     async def async_set_theme(self, dark: bool) -> dict[str, Any]:
         return await self._request("POST", "/theme", {"dark": dark})
 
+    async def async_set_rotation(self, degrees: int) -> dict[str, Any]:
+        return await self._request("POST", "/rotation", {"degrees": degrees})
+
     async def async_power(self, action: str) -> None:
         await self._request("POST", "/power", {"action": action})
 
