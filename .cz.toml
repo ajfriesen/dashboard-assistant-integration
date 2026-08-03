@@ -1,0 +1,6 @@
+[tool.commitizen]
+# Use the Conventional Commits ruleset for `cz commit` (guided prompt) and
+# `cz check` (validation, run from .githooks/commit-msg). Version bumping and the
+# changelog are owned by release-please in CI, so commitizen is used only to
+# author and lint messages here — no version_provider/tag settings needed.
+name = "cz_conventional_commits"
