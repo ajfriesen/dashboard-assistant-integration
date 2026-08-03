@@ -10,6 +10,12 @@ name: release-please
 # that PR is the release: it creates the vX.Y.Z tag and the GitHub Release, with
 # manifest.json already carrying the matching version (so HACS installs the right
 # one). Nothing to tag or bump by hand.
+#
+# Prereleases: force one with a `Release-As: 0.1.0-rc.1` commit footer. release-
+# please doesn't set the GitHub "pre-release" flag on its own (turning its
+# `prerelease` config on would wrongly flag every pre-1.0 stable release too), so
+# the final step below flags any release whose tag has a SemVer prerelease suffix
+# (a hyphen, e.g. -rc.1/-beta). That keeps it out of HACS for non-beta users.
 on:
   push:
     branches: [main]
@@ -23,6 +29,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Flag prerelease versions (tag contains a hyphen) as GitHub pre-releases,
+      # and drop them from "latest". Only runs when a release was actually cut.
+      - name: Mark prereleases
+        if: ${{ steps.release.outputs.release_created == 'true' && contains(steps.release.outputs.tag_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
