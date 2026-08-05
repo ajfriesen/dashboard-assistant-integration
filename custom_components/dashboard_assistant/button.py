@@ -11,7 +11,6 @@ from homeassistant.components.button import (
     ButtonEntity,
     ButtonEntityDescription,
 )
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -67,7 +66,6 @@ BUTTONS: tuple[DashboardAssistantButtonDescription, ...] = (
         key="factory_reset",
         name="Factory reset",
         icon="mdi:restore-alert",
-        entity_category=EntityCategory.CONFIG,
         press_fn=lambda client: client.async_reset(),
         warning=(
             "Factory reset requested: the device will clear its provisioning and "
@@ -123,7 +121,6 @@ class DashboardAssistantProvisionButton(DashboardAssistantEntity, ButtonEntity):
 
     _attr_name = "Set up kiosk login"
     _attr_icon = "mdi:login"
-    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: DashboardAssistantCoordinator) -> None:
         super().__init__(coordinator, "provision_kiosk_login")

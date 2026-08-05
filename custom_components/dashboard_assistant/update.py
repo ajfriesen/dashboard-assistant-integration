@@ -30,6 +30,8 @@ class SystemUpdate(DashboardAssistantEntity, UpdateEntity):
 
     _attr_name = "System update"
     _attr_device_class = UpdateDeviceClass.FIRMWARE
+    # UpdateEntity defaults to the Config category; None puts it under Controls.
+    _attr_entity_category = None
 
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, "update")
