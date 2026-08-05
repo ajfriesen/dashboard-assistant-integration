@@ -37,7 +37,7 @@ class DashboardAssistantSensorDescription(SensorEntityDescription):
 SENSORS: tuple[DashboardAssistantSensorDescription, ...] = (
     DashboardAssistantSensorDescription(
         key="last_touch",
-        name="Seconds since last touch",
+        name="Last touch",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:gesture-tap",
