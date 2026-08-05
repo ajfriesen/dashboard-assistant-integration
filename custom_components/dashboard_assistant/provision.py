@@ -46,15 +46,21 @@ async def async_provision_kiosk_login(
     duplicates. A fresh access token is minted each time and sent to the device.
     """
     # Give every tablet its own HA user so the user list makes it obvious which
-    # login belongs to which display. Reuse the device's own friendly name
-    # ("Dashboard Assistant (45299a)") — it already carries the short MAC suffix
-    # and matches the HA device card, so user and device line up at a glance. Fall
-    # back to the base name plus the short MAC (then the node id) if the device
-    # reports no name. The token carries the same label.
+    # login belongs to which display. The device's reported name is NOT unique —
+    # every tablet reports the same "Dashboard Assistant" — so always suffix a
+    # per-device id (the short MAC, falling back to the node id) unless the name
+    # already carries it. Without this the HA user list shows several identically
+    # named users and you can't tell which login belongs to which tablet. The
+    # short MAC also matches the device card's MAC connection, so user and device
+    # cross-reference. The token carries the same label.
     info = await client.async_get_info()
     mac = info.get("mac") or ""
     mac_short = mac.replace(":", "")[-6:] or info.get("node_id") or "unknown"
-    user_name = info.get("name") or f"{KIOSK_USER_NAME} ({mac_short})"
+    base_name = info.get("name") or KIOSK_USER_NAME
+    if mac_short.lower() in base_name.lower():
+        user_name = base_name
+    else:
+        user_name = f"{base_name} ({mac_short})"
     token_label = user_name
 
     # Reuse the recorded user if it still exists, else create a non-admin one.
