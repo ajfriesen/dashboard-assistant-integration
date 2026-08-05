@@ -8,6 +8,23 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.1.0-rc.2](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.1...v0.1.0-rc.2) (2026-08-05)
+
+
+### Features
+
+* **entities:** surface update, factory reset and kiosk login under Controls ([731f71e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/731f71e47a1cfd9a46208ecfef7089b12a7365a0))
+
+
+### Bug Fixes
+
+* **provision:** always suffix the kiosk user with a per-device id ([d1902b7](https://github.com/ajfriesen/dashboard-assistant-integration/commit/d1902b72933ca3f7a32c1274aac149ccb7199566))
+
+
+### Miscellaneous Chores
+
+* release 0.1.0-rc.2 ([f0ffe9f](https://github.com/ajfriesen/dashboard-assistant-integration/commit/f0ffe9f2fb7f5fc71aeb128ba0159e85a64e96ea))
+
 ## [0.1.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0...v0.1.0-rc.1) (2026-08-03)
 
 
