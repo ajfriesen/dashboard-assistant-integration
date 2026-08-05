@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -12,7 +14,7 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_KIOSK_USER_ID, LOGGER
+from .const import CONF_KIOSK_PROVISIONED, LOGGER
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
@@ -63,16 +65,43 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Auto-provision the kiosk login the first time only: create a dedicated HA
-    # user + long-lived token and hand it to the device so its browser signs in
-    # without anyone typing credentials on the kiosk. A failure here (e.g. the
-    # kiosk is briefly offline) must not fail the whole integration — the entities
-    # still work, and the re-provision button retries.
-    if not entry.data.get(CONF_KIOSK_USER_ID):
-        try:
-            await async_provision_kiosk_login(hass, entry, client)
-        except Exception:  # noqa: BLE001
-            LOGGER.exception("Failed to provision kiosk login; use the button to retry")
+    # Self-healing kiosk-login provisioning: create a dedicated HA user + token
+    # and push it to the device so its browser signs in without anyone typing
+    # credentials on the kiosk. Provisioning needs the device reachable, and every
+    # entity — so any manual retry — is unavailable while it is not, which is why a
+    # one-shot at setup or a manual button couldn't recover a failed attempt.
+    # Instead we re-attempt on each healthy coordinator refresh until the login has
+    # actually landed on the device (CONF_KIOSK_PROVISIONED), then stop.
+    # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
+    # and the lock keeps overlapping refreshes from provisioning twice.
+    provision_lock = asyncio.Lock()
+
+    async def _ensure_kiosk_login() -> None:
+        if entry.data.get(CONF_KIOSK_PROVISIONED) or provision_lock.locked():
+            return
+        async with provision_lock:
+            if entry.data.get(CONF_KIOSK_PROVISIONED):
+                return
+            try:
+                await async_provision_kiosk_login(hass, entry, client)
+            except Exception:  # noqa: BLE001
+                LOGGER.debug(
+                    "Kiosk-login provisioning failed; retrying on the next healthy update",
+                    exc_info=True,
+                )
+
+    @callback
+    def _reprovision_if_needed() -> None:
+        if coordinator.last_update_success and not entry.data.get(CONF_KIOSK_PROVISIONED):
+            entry.async_create_background_task(
+                hass, _ensure_kiosk_login(), "dashboard_assistant_provision"
+            )
+
+    if not entry.data.get(CONF_KIOSK_PROVISIONED):
+        entry.async_on_unload(coordinator.async_add_listener(_reprovision_if_needed))
+        # Attempt immediately — the first refresh above already succeeded, so the
+        # device is reachable and a healthy one is signed in before setup returns.
+        await _ensure_kiosk_login()
 
     return True
 

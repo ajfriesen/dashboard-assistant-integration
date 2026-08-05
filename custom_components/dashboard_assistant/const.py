@@ -32,6 +32,11 @@ MANUFACTURER = "Dashboard Assistant"
 KIOSK_USER_NAME = "Dashboard Assistant"
 CONF_KIOSK_USER_ID = "kiosk_user_id"
 CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
+# Set once the login has actually been pushed to the device. Distinct from
+# CONF_KIOSK_USER_ID (recorded as soon as the HA user is created, before the
+# push) so the self-healing retry knows whether the device itself is signed in,
+# not just whether the HA-side user exists.
+CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
 
 # Poll fallback interval. The primary update path is the SSE push stream; this
 # is a safety net in case the stream drops without the socket erroring.

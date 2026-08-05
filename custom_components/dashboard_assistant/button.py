@@ -17,7 +17,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .api import DashboardAssistantClient
 from .coordinator import DashboardAssistantConfigEntry, DashboardAssistantCoordinator
 from .entity import DashboardAssistantEntity
-from .provision import async_provision_kiosk_login
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,11 +82,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the buttons."""
     coordinator = entry.runtime_data
-    entities: list[ButtonEntity] = [
+    async_add_entities(
         DashboardAssistantButton(coordinator, description) for description in BUTTONS
-    ]
-    entities.append(DashboardAssistantProvisionButton(coordinator))
-    async_add_entities(entities)
+    )
 
 
 class DashboardAssistantButton(DashboardAssistantEntity, ButtonEntity):
@@ -109,25 +106,3 @@ class DashboardAssistantButton(DashboardAssistantEntity, ButtonEntity):
         result = await self.entity_description.press_fn(self.coordinator.client)
         # Page navigation returns a snapshot; power/screenshot do not.
         self.coordinator.apply_snapshot(result)
-
-
-class DashboardAssistantProvisionButton(DashboardAssistantEntity, ButtonEntity):
-    """Re-create the kiosk login and push it to the device.
-
-    Auto-provisioning runs once when the integration is added; this button re-runs
-    it on demand — after the kiosk was offline at setup, or to refresh the token.
-    It reuses the existing kiosk user, so pressing it repeatedly is safe.
-    """
-
-    _attr_name = "Set up kiosk login"
-    _attr_icon = "mdi:login"
-
-    def __init__(self, coordinator: DashboardAssistantCoordinator) -> None:
-        super().__init__(coordinator, "provision_kiosk_login")
-
-    async def async_press(self) -> None:
-        await async_provision_kiosk_login(
-            self.coordinator.hass,
-            self.coordinator.config_entry,
-            self.coordinator.client,
-        )

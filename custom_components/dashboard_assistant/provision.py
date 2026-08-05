@@ -23,6 +23,7 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import DashboardAssistantClient
 from .const import (
+    CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_REFRESH_TOKEN_ID,
     CONF_KIOSK_USER_ID,
     KIOSK_USER_NAME,
@@ -83,13 +84,34 @@ async def async_provision_kiosk_login(
     # what the kiosk stores.
     refresh_token = None
     if rt_id := entry.data.get(CONF_KIOSK_REFRESH_TOKEN_ID):
-        refresh_token = await hass.auth.async_get_refresh_token(rt_id)
+        # async_get_refresh_token is sync (returns RefreshToken | None), unlike
+        # async_create_refresh_token below — awaiting it raises "'RefreshToken'
+        # object can't be awaited".
+        refresh_token = hass.auth.async_get_refresh_token(rt_id)
     if refresh_token is None:
         refresh_token = await hass.auth.async_create_refresh_token(
             user,
             client_name=token_label,
             token_type=TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN,
             access_token_expiration=_TOKEN_LIFETIME,
+        )
+
+    # Record the HA user + token id *before* pushing to the device. The push can
+    # fail (device briefly offline), and the self-healing retry in __init__ must
+    # reuse this same user rather than create a second one — otherwise a flaky
+    # push would spawn duplicate "Dashboard Assistant" users. Only write when
+    # something changed so re-pushes don't churn the entry.
+    if (
+        entry.data.get(CONF_KIOSK_USER_ID) != user.id
+        or entry.data.get(CONF_KIOSK_REFRESH_TOKEN_ID) != refresh_token.id
+    ):
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CONF_KIOSK_USER_ID: user.id,
+                CONF_KIOSK_REFRESH_TOKEN_ID: refresh_token.id,
+            },
         )
 
     access_token = hass.auth.async_create_access_token(refresh_token)
@@ -102,17 +124,15 @@ async def async_provision_kiosk_login(
     except NoURLAvailableError:
         ha_url = None
 
+    # If this raises, the user/token are already recorded above, so the retry
+    # re-pushes without duplicating; the provisioned flag is set only once the
+    # push has actually landed, and is what stops the self-healing retry loop.
     await client.async_kiosk_login(access_token, ha_url)
 
-    # Record what we created so this stays idempotent and can be cleaned up.
-    hass.config_entries.async_update_entry(
-        entry,
-        data={
-            **entry.data,
-            CONF_KIOSK_USER_ID: user.id,
-            CONF_KIOSK_REFRESH_TOKEN_ID: refresh_token.id,
-        },
-    )
+    if not entry.data.get(CONF_KIOSK_PROVISIONED):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_KIOSK_PROVISIONED: True}
+        )
     LOGGER.info("Provisioned kiosk login for user %s", user.id)
 
 
