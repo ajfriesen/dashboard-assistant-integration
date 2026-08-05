@@ -8,6 +8,18 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.1.0-rc.3](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-08-05)
+
+
+### Features
+
+* **provision:** self-heal kiosk login and drop the manual button ([bf56fc1](https://github.com/ajfriesen/dashboard-assistant-integration/commit/bf56fc151851afbed57dc55cf70a53fa26b761ae))
+
+
+### Miscellaneous Chores
+
+* release 0.1.0-rc.3 ([39d3b60](https://github.com/ajfriesen/dashboard-assistant-integration/commit/39d3b60da3149d158c9c3273e18e267fe48a5c77))
+
 ## [0.1.0-rc.2](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.1...v0.1.0-rc.2) (2026-08-05)
 
 
