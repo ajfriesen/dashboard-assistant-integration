@@ -8,6 +8,19 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.1.0-rc.4](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.3...v0.1.0-rc.4) (2026-08-06)
+
+
+### Features
+
+* add OS generation sensor with tag label and history ([626f4d5](https://github.com/ajfriesen/dashboard-assistant-integration/commit/626f4d5d37b658f4a73df3d76077cdf68dff580b))
+* add Target version selector for installing any OS release ([c8fc481](https://github.com/ajfriesen/dashboard-assistant-integration/commit/c8fc481643b106273e822ab356283faffbd2ab2a))
+
+
+### Miscellaneous Chores
+
+* release 0.1.0-rc.4 ([7ef7fe0](https://github.com/ajfriesen/dashboard-assistant-integration/commit/7ef7fe0348a8c8cfaa4d68b73b76ac04ca038c16))
+
 ## [0.1.0-rc.3](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-08-05)
 
 
