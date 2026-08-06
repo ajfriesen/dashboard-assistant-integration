@@ -32,6 +32,9 @@ class DashboardAssistantSensorDescription(SensorEntityDescription):
     """Describes a sensor and how to read it from the snapshot."""
 
     value_fn: Callable[[dict[str, Any]], StateType]
+    # Optional: extra state attributes derived from the snapshot (e.g. a list the
+    # scalar state can't hold, like the full generation history).
+    attr_fn: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
 
 
 SENSORS: tuple[DashboardAssistantSensorDescription, ...] = (
@@ -84,6 +87,17 @@ SENSORS: tuple[DashboardAssistantSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:layers-triple",
         value_fn=lambda s: s["generations"],
+    ),
+    DashboardAssistantSensorDescription(
+        key="generation",
+        name="OS generation",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:tag-text",
+        # State is the current generation's NixOS label (the tag it was built
+        # from); attributes carry every bootable generation so you can see the
+        # history — number, date, label, and which one is current.
+        value_fn=lambda s: s.get("generation") or None,
+        attr_fn=lambda s: {"generations": s.get("generation_list") or []},
     ),
     DashboardAssistantSensorDescription(
         key="ip",
@@ -183,3 +197,9 @@ class DashboardAssistantSensor(DashboardAssistantEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         return self.entity_description.value_fn(self.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.attr_fn is None:
+            return None
+        return self.entity_description.attr_fn(self.data)
