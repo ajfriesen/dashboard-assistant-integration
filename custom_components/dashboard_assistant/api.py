@@ -193,6 +193,16 @@ class DashboardAssistantClient:
     async def async_install_update(self) -> None:
         await self._request("POST", "/update")
 
+    async def async_install_version(self, tag: str) -> None:
+        """Switch the device to a specific released tag (picker install).
+
+        Any discovered release the daemon knows about — newer or older (a
+        downgrade), stable or prerelease. The daemon validates the tag against
+        its known release set and then drives the same privileged rebuild as a
+        normal update.
+        """
+        await self._request("POST", "/install_version", {"tag": tag})
+
     async def async_take_screenshot(self) -> None:
         await self._request("POST", "/screenshot")
 
