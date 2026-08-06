@@ -121,4 +121,13 @@ steer the bump; see the [Conventional Commits spec](https://www.conventionalcomm
 A CI check validates each PR's title as a Conventional Commit (the squash-merge
 message release-please reads), so a malformed title is caught before it lands.
 
+### Create pre-release
+
+1. Create empty commit:
+```
+git commit --allow-empty -m "chore: release 0.1.0-rc.3" -m "Release-As: 0.1.0-rc.3"
+```
+2. Push
+3. Merge on GitHub
+
 [os]: https://github.com/ajfriesen/dashboard-assistant
