@@ -8,6 +8,14 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.2.0-rc.4](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.4...v0.2.0-rc.4) (2026-09-12)
+
+
+### Features
+
+* **binary_sensor:** filesystem health problem sensor ([284a035](https://github.com/ajfriesen/dashboard-assistant-integration/commit/284a0355becffaf2510c7fdf8207d5f0fc0cf036))
+* **binary_sensor:** filesystem health problem sensor ([22f07df](https://github.com/ajfriesen/dashboard-assistant-integration/commit/22f07dfc68b98f1a4074ec6a4016f7c6451ebf36))
+
 ## [0.1.0-rc.4](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.3...v0.1.0-rc.4) (2026-08-06)
 
 
