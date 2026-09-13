@@ -8,6 +8,21 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.2.0-rc.5](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.2.0-rc.4...v0.2.0-rc.5) (2026-09-13)
+
+
+### Features
+
+* ship brand images with the integration ([72ff926](https://github.com/ajfriesen/dashboard-assistant-integration/commit/72ff926595c78f2409fb32e5c6f3a19d0c12bf6f))
+* ship brand images with the integration ([71e2a0a](https://github.com/ajfriesen/dashboard-assistant-integration/commit/71e2a0ac5804c22f8878ec314c35dd754dd61cb6))
+* **switch:** restore the Sendspin player switch ([2368a30](https://github.com/ajfriesen/dashboard-assistant-integration/commit/2368a300ed7231a742cdc9ebd23f64586ff742a1))
+* **switch:** restore the Sendspin player switch ([88bc4f6](https://github.com/ajfriesen/dashboard-assistant-integration/commit/88bc4f6f02ddb16a64dde70cbe4c3811001e72ca))
+
+
+### Miscellaneous Chores
+
+* cut 0.2.0-rc.5 ([62fe356](https://github.com/ajfriesen/dashboard-assistant-integration/commit/62fe3569cd2e522ca05a0af4257f2a7d9d0ae65c))
+
 ## [0.2.0-rc.4](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.1.0-rc.4...v0.2.0-rc.4) (2026-09-12)
 
 
