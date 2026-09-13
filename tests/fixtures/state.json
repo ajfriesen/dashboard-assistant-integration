@@ -1,0 +1,173 @@
+{
+  "device": {
+    "name": "Dashboard Assistant (d7bbb4)",
+    "node_id": "da_555d31459f86",
+    "hostname": "dashboard-assistant-d7bbb4",
+    "mac": "88:a2:9e:d7:bb:b4",
+    "model": "Raspberry Pi 5 Model B Rev 1.1",
+    "serial": "555d31459f86482490091014e2d77c68",
+    "version": "1.0.0-rc.1"
+  },
+  "display": {
+    "on": true,
+    "brightness": 68
+  },
+  "page": {
+    "current": "Home",
+    "options": [
+      "Home",
+      "ToDo",
+      "Grafana"
+    ],
+    "slots": [
+      "Home | http://192.168.178.83:8123/home/overview",
+      "ToDo | http://192.168.178.83:8123/todo?entity_id=todo.einkaufsliste_2",
+      "Grafana | https://grafana.com/products/cloud/grafana/",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
+  "touch_seconds": 3448,
+  "memory": {
+    "total_mib": 4022,
+    "used_mib": 2532
+  },
+  "disk": {
+    "total_gib": 14.80029296875,
+    "used_gib": 2.8172569274902344
+  },
+  "generations": 6,
+  "generation": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+  "generation_list": [
+    {
+      "number": 6,
+      "date": "2026-09-13T13:47:42Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": true
+    },
+    {
+      "number": 5,
+      "date": "2026-09-13T13:44:43Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": false
+    },
+    {
+      "number": 4,
+      "date": "2026-09-13T13:37:54Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": false
+    },
+    {
+      "number": 3,
+      "date": "2026-09-12T17:05:22Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": false
+    },
+    {
+      "number": 2,
+      "date": "2026-09-12T12:57:25Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": false
+    },
+    {
+      "number": 1,
+      "date": "2026-03-17T19:56:39Z",
+      "label": "dashboard-assistant-1.0.0-rc.1-sd-card-26.11.20260801.148bab9",
+      "current": false
+    }
+  ],
+  "update": {
+    "installed_version": "1.0.0-rc.1",
+    "latest_version": "1.0.0-rc.1",
+    "in_progress": false,
+    "installable": true,
+    "available": [
+      {
+        "tag": "v1.0.0-rc.1",
+        "name": "v1.0.0-rc.1",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.3.0-rc.1",
+        "name": "v0.3.0-rc.1",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.2.1-rc.1",
+        "name": "v0.2.1-rc.1",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.2.0-rc.1",
+        "name": "v0.2.0-rc.1",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.1.0-rc.3",
+        "name": "v0.1.0-rc.3",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.1.0-rc.2",
+        "name": "v0.1.0-rc.2",
+        "prerelease": true
+      },
+      {
+        "tag": "v0.1.0-rc.1",
+        "name": "v0.1.0-rc.1",
+        "prerelease": true
+      }
+    ]
+  },
+  "zoom": 100,
+  "theme": {
+    "dark": false
+  },
+  "rotation": {
+    "current": 0,
+    "options": [
+      0,
+      90,
+      180,
+      270
+    ]
+  },
+  "sendspin": {
+    "on": true,
+    "state": "active"
+  },
+  "host": {
+    "ip": "192.168.178.212",
+    "uptime": 41565,
+    "cpu": 15
+  },
+  "battery": {
+    "present": false,
+    "level": 0,
+    "charging": false
+  },
+  "temperature": {
+    "present": true,
+    "celsius": 63.35
+  },
+  "btrfs": {
+    "present": true,
+    "ok": true,
+    "readonly": false,
+    "write_errs": 0,
+    "read_errs": 0,
+    "flush_errs": 0,
+    "corruption_errs": 0,
+    "generation_errs": 0,
+    "devices": 1
+  },
+  "screenshot": {
+    "available": true,
+    "updated_at": 1789307312
+  }
+}

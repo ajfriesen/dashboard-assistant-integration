@@ -1,0 +1,21 @@
+# Run the pytest suite (pytest-homeassistant-custom-component) on every push
+# and PR. The fixtures in tests/fixtures are real daemon payloads, so this
+# catches entity-gating regressions against the shapes devices actually serve.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r tests/requirements.txt
+      - run: pytest -q

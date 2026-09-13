@@ -1,0 +1,14 @@
+{
+  "has_battery": false,
+  "has_btrfs": true,
+  "has_sendspin": true,
+  "has_temperature": true,
+  "hostname": "dashboard-assistant-d7bbb4",
+  "installable": true,
+  "mac": "88:a2:9e:d7:bb:b4",
+  "model": "Raspberry Pi 5 Model B Rev 1.1",
+  "name": "Dashboard Assistant (d7bbb4)",
+  "node_id": "da_555d31459f86",
+  "serial": "555d31459f86482490091014e2d77c68",
+  "version": "1.0.0-rc.1"
+}
