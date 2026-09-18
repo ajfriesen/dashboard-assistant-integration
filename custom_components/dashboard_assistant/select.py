@@ -23,10 +23,10 @@ async def async_setup_entry(
         PageSelect(coordinator),
         RotationSelect(coordinator),
     ]
-    # The version picker only makes sense where the image can apply switches (the
-    # persistent disk / SD targets, not the ephemeral ISO), matching how the
-    # update entity gates its Install button.
-    if coordinator.data["update"].get("installable"):
+    # The version picker only makes sense where the image can apply switches,
+    # matching how the update entity gates its Install button. .get chain: a
+    # daemon that reports no "update" block must not abort the platform.
+    if coordinator.data.get("update", {}).get("installable"):
         entities.append(TargetVersionSelect(coordinator))
     async_add_entities(entities)
 
