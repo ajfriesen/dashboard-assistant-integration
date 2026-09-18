@@ -38,6 +38,14 @@ CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
 # not just whether the HA-side user exists.
 CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
 
+# SHA-256 of the device's TLS certificate, pinned when the entry is created.
+# Absent means an entry that predates TLS, which keeps talking cleartext to a
+# device that may also predate it -- see scheme_for/pin_for in api.py. Not a
+# secret: it is a hash of a certificate the device shows to anyone who connects,
+# so it stays visible in diagnostics, where it is the first thing worth seeing
+# when a device stops connecting after a reset.
+CONF_CERT_FINGERPRINT = "cert_fingerprint"
+
 # Poll fallback interval. The primary update path is the SSE push stream; this
 # is a safety net in case the stream drops without the socket erroring.
 POLL_INTERVAL = timedelta(seconds=60)

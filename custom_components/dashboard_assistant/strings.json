@@ -33,7 +33,7 @@
       },
       "reauth_confirm": {
         "title": "Dashboard Assistant",
-        "description": "The API token was rejected. This usually means the device was factory-reset, which regenerates it. Enter the current api_token from its dashboard-assistant.yaml seed file, or remove this entry and re-add the device to pair again.",
+        "description": "The device could not be verified. This usually means it was factory-reset, which regenerates both its API token and its security certificate. Enter the current api_token from its dashboard-assistant.yaml seed file, or remove this entry and re-add the device to pair again.",
         "data": {
           "token": "API token"
         }
@@ -42,7 +42,8 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid API token",
-      "pairing_closed": "This device has already been paired. Remove its existing Home Assistant entry, or factory-reset the device from its admin page, then try again."
+      "pairing_closed": "This device has already been paired. Remove its existing Home Assistant entry, or factory-reset the device from its admin page, then try again.",
+      "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it."
     },
     "abort": {
       "already_configured": "This device is already configured",

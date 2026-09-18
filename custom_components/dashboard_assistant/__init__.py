@@ -11,10 +11,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     DashboardAssistantAuthError,
+    DashboardAssistantCertMismatchError,
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_KIOSK_PROVISIONED, LOGGER
+from .const import CONF_CERT_FINGERPRINT, CONF_KIOSK_PROVISIONED, LOGGER
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
@@ -48,10 +49,21 @@ async def async_setup_entry(
         entry.data[CONF_HOST],
         entry.data[CONF_PORT],
         entry.data[CONF_TOKEN],
+        # .get, not [], and no config-entry migration: an entry written before
+        # TLS has no pin, and absent is exactly the right meaning -- talk
+        # cleartext to a device that may also predate TLS. A migration could not
+        # invent a fingerprint anyway without contacting the device.
+        entry.data.get(CONF_CERT_FINGERPRINT),
     )
 
     try:
         info = await client.async_get_info()
+    except DashboardAssistantCertMismatchError as err:
+        # The device is reachable but is not the one this entry pinned. Benignly,
+        # that means it was factory-reset and regenerated its certificate. Route
+        # to reauth, which re-pins -- ConfigEntryNotReady would retry forever
+        # against a mismatch that will never resolve itself.
+        raise ConfigEntryAuthFailed(str(err)) from err
     except DashboardAssistantAuthError as err:
         raise ConfigEntryAuthFailed(str(err)) from err
     except DashboardAssistantError as err:
