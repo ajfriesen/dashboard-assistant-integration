@@ -134,10 +134,10 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Fetch the token from the device without anyone typing it.
 
         Attempts pairing immediately — a fresh device pairs openly, so choosing
-        this option just works with no further click. An already-set-up device
-        needs its Config → Pair window opened; then this form's Retry re-attempts.
-        Pairing is attempted on every entry (menu pick and Retry alike), so it
-        never gets stuck on an empty confirm form.
+        this option just works with no further click. An already-paired device
+        refuses, and has to have its old entry removed or be factory-reset
+        before Retry can succeed. Pairing is attempted on every entry (menu pick
+        and Retry alike), so it never gets stuck on an empty confirm form.
         """
         errors: dict[str, str] = {}
         assert self._host is not None

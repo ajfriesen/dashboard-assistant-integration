@@ -55,10 +55,12 @@ async def async_pair(
     """Fetch the API token from a device whose pairing window is open.
 
     The daemon returns the token (plus ``node_id`` and ``name``) only while the
-    operator has pressed *Pair* on the device's Config screen — or the build
-    auto-confirms — so no one has to read or type it. The call carries no auth: the
-    gate is the pairing window, not a token the caller does not yet have. Raises
-    :class:`DashboardAssistantPairingClosedError` when the window is closed.
+    device has not yet been paired — or where the build sets pairAutoConfirm —
+    so no one has to read or type it. A device only pairs once, which is what
+    stops a stranger on the network adopting the panel. The call carries no
+    auth: the gate is the pairing window, not a token the caller does not yet
+    have. Raises :class:`DashboardAssistantPairingClosedError` when the window
+    is closed.
     """
     url = f"http://{host}:{port}/api/ha/pair"
     try:
