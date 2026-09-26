@@ -1,13 +1,15 @@
-# Dashboard Assistant — Home Assistant integration
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/ajfriesen/dashboard-assistant-integration)
 
-A first-party Home Assistant integration for [Dashboard Assistant OS][os] kiosks.
-It talks to the on-device daemon over an authenticated LAN API (HTTP + Server-Sent
-Events), so there is **no MQTT broker to run** — the device is discovered over
-mDNS and controlled directly.
+# Dashboard Assistant Integration
+
+A Home Assistant integration for [Dashboard Assistant](https://dashboardassistant.org/) kiosks operating system.
+This lets you discover and provision tablets with just one click in Home Assistant.
+No complex setups, just a click.
 
 ## What you get
 
-The kiosk appears in Home Assistant as a single device with:
+The easiest Home Assistant Kiosk setup.
+The tablet appears as a Home Assistant device and can be controlled:
 
 - **Light** — the display: on/off (DPMS) plus brightness (backlight).
 - **Select** — jump to any configured page.
@@ -21,21 +23,25 @@ The kiosk appears in Home Assistant as a single device with:
   uptime, IP, hostname, model, serial, and (where present) battery and
   temperature.
 
-State updates arrive instantly over the SSE push stream, with a periodic poll as
-a fallback (`local_push`).
+State updates arrive instantly over the SSE push stream, with a periodic poll as a fallback (`local_push`).
 
 ## Installation (HACS)
 
-This integration isn't in the default HACS store, so it's added as a **custom
-repository**. You only do this once; updates then show up in HACS like any other.
+This integration isn't in the default HACS store, so it's added as a **custom repository** yet.
+You only do this once; updates then show up in HACS like any other.
+
+Waiting for this PR to get merged.
+
+![GitHub pull request status](https://img.shields.io/github/status/s/pulls/hacs/default/11319)
 
 ### Prerequisites
 
 - A running Home Assistant instance you can reach in a browser.
-- [HACS](https://hacs.xyz/) installed and set up. If you don't have it yet,
-  follow the official [HACS installation guide](https://hacs.xyz/docs/use/download/download/).
+- [HACS](https://hacs.xyz/) installed and set up.
+  If you don't have it yet, follow the official [HACS installation guide](https://hacs.xyz/docs/use/download/download/).
 
 ### 1. Add the custom repository
+
 
 1. In Home Assistant, open **HACS** from the sidebar.
 2. Click the **⋮** menu in the top-right corner and choose **Custom repositories**.
@@ -50,11 +56,14 @@ repository**. You only do this once; updates then show up in HACS like any other
 
 ### 2. Install the integration
 
-1. Back in HACS, search for **Dashboard Assistant**.
-2. Open it and click **Download** (choose the latest version).
-3. **Restart Home Assistant** when prompted
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ajfriesen&category=integration&repository=dashboard-assistant-integration)
+
+1. Open it and click **Download** (choose the latest version).
+2. **Restart Home Assistant** when prompted
    (**Settings → System → Restart**). HACS only copies the files; Home
    Assistant loads the integration on restart.
+
+
 
 ### 3. Add the device
 
@@ -85,49 +94,3 @@ If you'd rather not use HACS, copy the integration in by hand:
 2. Restart Home Assistant.
 3. Add the device as described in [step 3](#3-add-the-device) above.
 
-## How it connects
-
-The daemon exposes `http://<device>:8081/api/ha/*`, guarded by a bearer token.
-The token is generated on the device on first boot (or seeded/imported) and shown
-on the on-screen Config panel. See the OS repo (`daemon/ha.go`,
-`modules/core/ha-api.nix`) for the device side.
-
-## Releasing
-
-Versioning, the changelog and GitHub Releases are automated with
-[release-please](https://github.com/googleapis/release-please) driven by
-[Conventional Commits](https://www.conventionalcommits.org/). You never edit the
-changelog or bump the version by hand — you write good commit messages.
-
-**Day to day:** commit with a Conventional Commit message — either straight to
-`main` or on a branch you merge; release-please reads the commit history, so both
-count. Examples: `feat: add rotation select`, `fix: handle missing battery`,
-`docs: expand HACS steps`. The type decides the version bump:
-
-- `feat:` → minor (0.1.0 → 0.2.0)
-- `fix:` / `docs:` / `chore:` / `refactor:` / … → patch (0.1.0 → 0.1.1)
-- a `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer → major (0.1.0 → 1.0.0)
-
-**To cut a release:** release-please keeps a single **release PR** open (titled
-e.g. `chore(main): release 0.2.0`) that bumps
-`custom_components/dashboard_assistant/manifest.json` and updates `CHANGELOG.md`
-from the commits since the last release. Review it and **merge** — that tags
-`v0.2.0`, publishes the GitHub Release, and (because the manifest was bumped in
-the same commit the tag points at) HACS installs the matching version. There is
-no tag to push or version to edit yourself.
-
-Prefix a commit with `chore:`/`build:` etc. or add a `BREAKING CHANGE:` footer to
-steer the bump; see the [Conventional Commits spec](https://www.conventionalcommits.org/).
-A CI check validates each PR's title as a Conventional Commit (the squash-merge
-message release-please reads), so a malformed title is caught before it lands.
-
-### Create pre-release
-
-1. Create empty commit:
-```
-git commit --allow-empty -m "chore: release 0.1.0-rc.3" -m "Release-As: 0.1.0-rc.3"
-```
-2. Push
-3. Merge on GitHub
-
-[os]: https://github.com/ajfriesen/dashboard-assistant
