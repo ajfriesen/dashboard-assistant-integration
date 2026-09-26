@@ -8,6 +8,21 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [0.3.0-rc.5](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.2.0-rc.5...v0.3.0-rc.5) (2026-09-26)
+
+
+### Features
+
+* pin the device TLS certificate and ready the repo for HACS ([f225371](https://github.com/ajfriesen/dashboard-assistant-integration/commit/f22537112493b82552596a950ba6c151525347ab))
+* pin the device's TLS certificate ([ea2e417](https://github.com/ajfriesen/dashboard-assistant-integration/commit/ea2e4170fd131e16c2b2e13e41fe9126335873c9))
+
+
+### Bug Fixes
+
+* drop references to the removed on-screen Pair button ([2d97a80](https://github.com/ajfriesen/dashboard-assistant-integration/commit/2d97a80cca354d86a73775f71ef2c6791523e927))
+* require Home Assistant 2025.2.0 ([49c1957](https://github.com/ajfriesen/dashboard-assistant-integration/commit/49c1957d7da8b173c0fe7b91131d53b1c004c301))
+* tolerate a daemon snapshot missing optional keys ([add2f1c](https://github.com/ajfriesen/dashboard-assistant-integration/commit/add2f1cdc0e670e28a7d96f49bd8fa98d684e585))
+
 ## [0.2.0-rc.5](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.2.0-rc.4...v0.2.0-rc.5) (2026-09-13)
 
 
