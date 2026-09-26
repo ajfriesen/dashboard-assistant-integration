@@ -6,3 +6,6 @@ __pycache__/
 .direnv/
 result
 result-*
+
+# OS images pulled in for manual testing; they belong on the release, not in git
+*.raw.zst
