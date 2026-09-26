@@ -94,3 +94,10 @@ If you'd rather not use HACS, copy the integration in by hand:
 2. Restart Home Assistant.
 3. Add the device as described in [step 3](#3-add-the-device) above.
 
+## Author
+
+This project was created by Andrej Friesen in 2026.
+
+<a href="https://github.com/ajfriesen">
+  <img src="https://wsrv.nl/?url=github.com/ajfriesen.png&w=200&h=200&fit=cover&mask=circle" width="100" alt="Andrej Friesen">
+</a>
