@@ -36,13 +36,16 @@ class SystemUpdate(DashboardAssistantEntity, UpdateEntity):
     def __init__(self, coordinator) -> None:
         super().__init__(coordinator, "update")
         features = UpdateEntityFeature.PROGRESS | UpdateEntityFeature.RELEASE_NOTES
-        if self.data["update"].get("installable"):
+        if self._update.get("installable"):
             features |= UpdateEntityFeature.INSTALL
         self._attr_supported_features = features
 
     @property
     def _update(self) -> dict[str, Any]:
-        return self.data["update"]
+        # .get rather than indexing: this entity is added unconditionally, so a
+        # snapshot without an "update" block would otherwise fail in __init__
+        # and take the whole platform down with it.
+        return self.data.get("update") or {}
 
     @property
     def installed_version(self) -> str | None:

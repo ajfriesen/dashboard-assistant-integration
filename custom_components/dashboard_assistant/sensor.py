@@ -172,9 +172,15 @@ async def async_setup_entry(
     """Set up sensors, adding battery/temperature only where the hardware has them."""
     coordinator = entry.runtime_data
     descriptions = list(SENSORS)
-    if coordinator.info.get("has_battery") or coordinator.data["battery"]["present"]:
+    # .get chains rather than indexing: an older daemon's snapshot may not carry
+    # these keys at all, and a KeyError here aborts the whole platform.
+    if coordinator.info.get("has_battery") or coordinator.data.get("battery", {}).get(
+        "present"
+    ):
         descriptions.append(BATTERY_SENSOR)
-    if coordinator.info.get("has_temperature") or coordinator.data["temperature"]["present"]:
+    if coordinator.info.get("has_temperature") or coordinator.data.get(
+        "temperature", {}
+    ).get("present"):
         descriptions.append(TEMPERATURE_SENSOR)
     async_add_entities(
         DashboardAssistantSensor(coordinator, description) for description in descriptions

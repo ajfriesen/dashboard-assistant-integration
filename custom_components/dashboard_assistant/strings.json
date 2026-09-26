@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Dashboard Assistant",
-        "description": "Enter the address and API token of your Dashboard Assistant device. The token is shown on the device's Config → Info screen.",
+        "description": "Enter the address and API token of your Dashboard Assistant device. The device never displays its token — it is the api_token from the dashboard-assistant.yaml seed file you provisioned it with. Leave this to pairing instead if you can.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -21,19 +21,19 @@
       },
       "pair": {
         "title": "Pair with {name}",
-        "description": "Couldn't pair automatically. If this device is already set up, open **Config → Add to HA → Pair** on its screen, then retry. (A brand-new device pairs on its own.)",
+        "description": "Couldn't pair automatically. A device only pairs once, so an already-adopted device refuses to hand out its token again — remove its old Home Assistant entry, or factory-reset the device from its admin page, then retry. (A brand-new device pairs on its own.)",
         "submit": "Retry"
       },
       "manual": {
         "title": "Dashboard Assistant",
-        "description": "Enter the API token shown on {name}'s Config → Info screen.",
+        "description": "Enter {name}'s API token — the api_token from the dashboard-assistant.yaml seed file it was provisioned with. The device never displays it.",
         "data": {
           "token": "API token"
         }
       },
       "reauth_confirm": {
         "title": "Dashboard Assistant",
-        "description": "The API token was rejected. Enter the current token from the device's Config → Info screen.",
+        "description": "The device could not be verified. This usually means it was factory-reset, which regenerates both its API token and its security certificate. Enter the current api_token from its dashboard-assistant.yaml seed file, or remove this entry and re-add the device to pair again.",
         "data": {
           "token": "API token"
         }
@@ -42,7 +42,8 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid API token",
-      "pairing_closed": "The device isn't in pairing mode. On its screen, open Config → Add to HA and press Pair, then try again."
+      "pairing_closed": "This device has already been paired. Remove its existing Home Assistant entry, or factory-reset the device from its admin page, then try again.",
+      "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it."
     },
     "abort": {
       "already_configured": "This device is already configured",

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import ssl
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -27,8 +29,74 @@ class DashboardAssistantPairingClosedError(DashboardAssistantError):
     """The device is not currently in pairing mode (HTTP 403)."""
 
 
+class DashboardAssistantCertMismatchError(DashboardAssistantError):
+    """The device presented a different TLS certificate than the pinned one.
+
+    Its own class, and caught ahead of aiohttp.ClientError, because
+    ServerFingerprintMismatch subclasses ClientError: left to fall through it
+    would surface as a plain connection failure, and "this is not the device you
+    paired with" would read as "the device is offline". The benign cause is a
+    factory reset, which regenerates the certificate -- reauth re-pins.
+    """
+
+
+def scheme_for(fingerprint: str | None) -> str:
+    """https once a pin exists, http for a legacy entry that predates TLS."""
+    return "https" if fingerprint else "http"
+
+
+def pin_for(fingerprint: str | None) -> aiohttp.Fingerprint | bool:
+    """The per-request ``ssl`` argument for a given stored pin.
+
+    Per-request rather than per-session on purpose: Home Assistant shares one
+    aiohttp connector process-wide, so a custom SSLContext on the session would
+    leak into every other integration, and building our own connector would lose
+    HA's DNS resolver, connection limits and shutdown hooks. aiohttp resolves
+    ``ssl`` per request, so a Fingerprint here overrides the shared connector for
+    this call alone -- and selects the unverified context, which is what we want:
+    the certificate is self-signed and the device is reached at an IP that
+    changes on DHCP renewal, so there is no chain and no hostname worth checking.
+    The fingerprint identifies the machine instead.
+
+    ``False`` (no pin) means a legacy cleartext entry, where this is unused.
+    """
+    if not fingerprint:
+        return False
+    return aiohttp.Fingerprint(bytes.fromhex(fingerprint))
+
+
+async def async_fetch_fingerprint(hass: Any, host: str, port: int) -> str:
+    """SHA-256 of the device's TLS certificate, for pinning on first contact.
+
+    This is the "first use" of trust-on-first-use: the certificate is accepted
+    unseen, and every later connection must present the same one. That protects
+    the session against anyone who arrives afterwards; it does not protect
+    against an attacker already intercepting at this moment, which is accepted
+    (the threat being closed is passive capture, not active interception).
+
+    Runs in an executor: ssl.get_server_certificate blocks on the network, and
+    Home Assistant's event loop must not.
+    """
+
+    def _fetch() -> str:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        pem = ssl.get_server_certificate((host, port), timeout=10)
+        der = ssl.PEM_cert_to_DER_cert(pem)
+        return hashlib.sha256(der).hexdigest()
+
+    try:
+        return await hass.async_add_executor_job(_fetch)
+    except OSError as err:
+        raise DashboardAssistantConnectionError(str(err)) from err
+
+
 async def async_identify(
-    session: aiohttp.ClientSession, host: str, port: int
+    session: aiohttp.ClientSession,
+    host: str,
+    port: int,
+    fingerprint: str | None = None,
 ) -> dict[str, Any]:
     """Fetch the device's stable identity (``node_id`` + ``name``).
 
@@ -36,34 +104,45 @@ async def async_identify(
     zeroconf discovery to key on a stable id instead of the IP, so one device is
     one Home Assistant entry regardless of address (or a later DHCP change).
     """
-    url = f"http://{host}:{port}/api/ha/identify"
+    url = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha/identify"
     try:
         async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=10)
+            url,
+            timeout=aiohttp.ClientTimeout(total=10),
+            ssl=pin_for(fingerprint),
         ) as resp:
             if resp.status >= 400:
                 text = await resp.text()
                 raise DashboardAssistantError(f"HTTP {resp.status}: {text.strip()}")
             return await resp.json()
+    except aiohttp.ServerFingerprintMismatch as err:
+        raise DashboardAssistantCertMismatchError(str(err)) from err
     except aiohttp.ClientError as err:
         raise DashboardAssistantConnectionError(str(err)) from err
 
 
 async def async_pair(
-    session: aiohttp.ClientSession, host: str, port: int
+    session: aiohttp.ClientSession,
+    host: str,
+    port: int,
+    fingerprint: str | None = None,
 ) -> dict[str, Any]:
     """Fetch the API token from a device whose pairing window is open.
 
     The daemon returns the token (plus ``node_id`` and ``name``) only while the
-    operator has pressed *Pair* on the device's Config screen — or the build
-    auto-confirms — so no one has to read or type it. The call carries no auth: the
-    gate is the pairing window, not a token the caller does not yet have. Raises
-    :class:`DashboardAssistantPairingClosedError` when the window is closed.
+    device has not yet been paired — or where the build sets pairAutoConfirm —
+    so no one has to read or type it. A device only pairs once, which is what
+    stops a stranger on the network adopting the panel. The call carries no
+    auth: the gate is the pairing window, not a token the caller does not yet
+    have. Raises :class:`DashboardAssistantPairingClosedError` when the window
+    is closed.
     """
-    url = f"http://{host}:{port}/api/ha/pair"
+    url = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha/pair"
     try:
         async with session.post(
-            url, timeout=aiohttp.ClientTimeout(total=15)
+            url,
+            timeout=aiohttp.ClientTimeout(total=15),
+            ssl=pin_for(fingerprint),
         ) as resp:
             if resp.status == 403:
                 raise DashboardAssistantPairingClosedError("pairing window not open")
@@ -71,6 +150,8 @@ async def async_pair(
                 text = await resp.text()
                 raise DashboardAssistantError(f"HTTP {resp.status}: {text.strip()}")
             return await resp.json()
+    except aiohttp.ServerFingerprintMismatch as err:
+        raise DashboardAssistantCertMismatchError(str(err)) from err
     except aiohttp.ClientError as err:
         raise DashboardAssistantConnectionError(str(err)) from err
 
@@ -89,11 +170,13 @@ class DashboardAssistantClient:
         host: str,
         port: int,
         token: str,
+        fingerprint: str | None = None,
     ) -> None:
         self._session = session
         self._host = host
         self._port = port
-        self._base = f"http://{host}:{port}/api/ha"
+        self._ssl = pin_for(fingerprint)
+        self._base = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha"
         self._headers = {"Authorization": f"Bearer {token}"}
 
     @property
@@ -112,6 +195,7 @@ class DashboardAssistantClient:
                 headers=self._headers,
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=15),
+                ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     raise DashboardAssistantAuthError("invalid API token")
@@ -121,6 +205,8 @@ class DashboardAssistantClient:
                 if resp.content_type == "application/json":
                     return await resp.json()
                 return await resp.read()
+        except aiohttp.ServerFingerprintMismatch as err:
+            raise DashboardAssistantCertMismatchError(str(err)) from err
         except aiohttp.ClientError as err:
             raise DashboardAssistantConnectionError(str(err)) from err
 
@@ -223,6 +309,7 @@ class DashboardAssistantClient:
             self.events_url,
             headers={**self._headers, "Accept": "text/event-stream"},
             timeout=aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=60),
+            ssl=self._ssl,
         ) as resp:
             if resp.status == 401:
                 raise DashboardAssistantAuthError("invalid API token")

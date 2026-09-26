@@ -96,6 +96,71 @@ async def test_old_daemon_without_btrfs_key(
     assert hass.states.get(f"binary_sensor.{DEVICE_SLUG}_filesystem") is None
 
 
+async def test_old_daemon_without_battery_key(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """A daemon reporting no battery block must not crash entity setup."""
+    info = copy.deepcopy(device_info)
+    state = copy.deepcopy(device_state)
+    info.pop("has_battery", None)
+    state.pop("battery", None)
+
+    entry = await setup_device(hass, aioclient_mock, info, state)
+
+    assert entry.state.value == "loaded"
+    assert hass.states.get(f"sensor.{DEVICE_SLUG}_battery") is None
+    assert hass.states.get(f"binary_sensor.{DEVICE_SLUG}_battery_charging") is None
+    # the rest of both platforms still came up
+    assert hass.states.get(f"sensor.{DEVICE_SLUG}_cpu_usage") is not None
+    assert hass.states.get(f"binary_sensor.{DEVICE_SLUG}_filesystem") is not None
+
+
+async def test_old_daemon_without_temperature_key(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """A daemon reporting no temperature block must not crash sensor setup."""
+    info = copy.deepcopy(device_info)
+    state = copy.deepcopy(device_state)
+    info.pop("has_temperature", None)
+    state.pop("temperature", None)
+
+    entry = await setup_device(hass, aioclient_mock, info, state)
+
+    assert entry.state.value == "loaded"
+    assert hass.states.get(f"sensor.{DEVICE_SLUG}_temperature") is None
+    assert hass.states.get(f"sensor.{DEVICE_SLUG}_cpu_usage") is not None
+
+
+async def test_old_daemon_without_update_key(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """No update block: the update entity is added unconditionally, so this is
+    the gate that would take a whole platform down rather than skip one entity."""
+    state = copy.deepcopy(device_state)
+    state.pop("update", None)
+
+    entry = await setup_device(hass, aioclient_mock, device_info, state)
+
+    assert entry.state.value == "loaded"
+    # the entity still exists, just without a version or an Install button
+    update = hass.states.get(f"update.{DEVICE_SLUG}_system_update")
+    assert update is not None
+    assert update.attributes.get("installed_version") is None
+    # and the version picker it gates is absent
+    assert hass.states.get(f"select.{DEVICE_SLUG}_target_version") is None
+    # sibling entities on the same platforms are unaffected
+    assert hass.states.get(f"select.{DEVICE_SLUG}_page") is not None
+
+
 async def test_filesystem_sensor_reports_problem(
     hass: HomeAssistant,
     aioclient_mock: Any,

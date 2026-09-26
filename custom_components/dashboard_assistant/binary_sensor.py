@@ -22,10 +22,13 @@ async def async_setup_entry(
     """Set up the binary sensors the device's capabilities call for."""
     coordinator = entry.runtime_data
     entities: list[BinarySensorEntity] = []
-    if coordinator.info.get("has_battery") or coordinator.data["battery"]["present"]:
+    # .get chains rather than indexing: an older daemon's snapshot has no
+    # "btrfs" key at all (ext4 devices also just report present: false), and the
+    # same is true of battery on a daemon that predates it.
+    if coordinator.info.get("has_battery") or coordinator.data.get("battery", {}).get(
+        "present"
+    ):
         entities.append(BatteryChargingSensor(coordinator))
-    # .get chain rather than indexing: an older daemon's snapshot has no
-    # "btrfs" key at all (ext4 devices also just report present: false).
     if coordinator.info.get("has_btrfs") or coordinator.data.get("btrfs", {}).get(
         "present"
     ):
