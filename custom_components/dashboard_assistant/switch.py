@@ -1,4 +1,4 @@
-"""Dark-mode and Sendspin player switches."""
+"""Dark-mode, Sendspin player, and screen saver switches."""
 
 from __future__ import annotations
 
@@ -22,6 +22,9 @@ async def async_setup_entry(
     entities: list[SwitchEntity] = [DarkModeSwitch(coordinator)]
     if coordinator.info.get("has_sendspin") or coordinator.data.get("sendspin"):
         entities.append(SendspinSwitch(coordinator))
+    # Older OS builds have no screen saver; create nothing rather than a dead switch.
+    if "screensaver" in coordinator.data:
+        entities.append(ScreensaverSwitch(coordinator))
     async_add_entities(entities)
 
 
@@ -75,4 +78,30 @@ class SendspinSwitch(DashboardAssistantEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         snapshot = await self.coordinator.client.async_set_sendspin(False)
+        await self._run_command(snapshot)
+
+
+class ScreensaverSwitch(DashboardAssistantEntity, SwitchEntity):
+    """ON shows the selected screen saver now, OFF dismisses it.
+
+    It also turns on by itself after the idle timeout, and off when someone
+    touches the screen.
+    """
+
+    _attr_name = "Screen saver"
+    _attr_icon = "mdi:monitor-star"
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "screensaver")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.data["screensaver"]["active"])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_screensaver(active=True)
+        await self._run_command(snapshot)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_screensaver(active=False)
         await self._run_command(snapshot)
