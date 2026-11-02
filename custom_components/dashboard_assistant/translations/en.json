@@ -21,7 +21,7 @@
       },
       "pair": {
         "title": "Pair with {name}",
-        "description": "Couldn't pair automatically. A device only pairs once, so an already-adopted device refuses to hand out its token again — remove its old Home Assistant entry, or factory-reset the device from its admin page, then retry. (A brand-new device pairs on its own.)",
+        "description": "Couldn't pair automatically. A device hands out its token only once, and removing its Home Assistant entry does not change that. Choose \"Enter the token manually\" instead (it is in /var/lib/dashboard-assistant/api-token on the device), or factory-reset the device from its admin page and retry. (A brand-new device pairs on its own.)",
         "submit": "Retry"
       },
       "manual": {
@@ -42,7 +42,7 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid API token",
-      "pairing_closed": "This device has already been paired. Remove its existing Home Assistant entry, or factory-reset the device from its admin page, then try again.",
+      "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Enter its token manually, or factory-reset the device from its admin page, then try again.",
       "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it."
     },
     "abort": {
