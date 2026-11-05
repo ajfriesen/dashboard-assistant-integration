@@ -1,6 +1,9 @@
 {
   "domain": "dashboard_assistant",
   "name": "Dashboard Assistant",
+  "after_dependencies": [
+    "lovelace"
+  ],
   "codeowners": [
     "@ajfriesen"
   ],

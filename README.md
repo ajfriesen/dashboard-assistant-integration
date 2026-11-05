@@ -85,6 +85,14 @@ you'll see a "Dashboard Assistant" discovered card under
      defaults to port **8081**.
 4. Submit. The kiosk appears as a single device with all its entities.
 
+### 4. Choose the dashboard
+
+The device shows Home Assistant's default dashboard until you pick another. Open
+**Settings → Devices & services → Dashboard Assistant**, click **Configure**, and
+choose a **Dashboard**. Saving sends the new dashboard to the device straight
+away. Admin-only dashboards are not listed, because the device signs in as a
+regular user.
+
 ### Updating
 
 When a new release is published, HACS shows an update on the **Dashboard

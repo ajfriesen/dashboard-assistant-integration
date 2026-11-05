@@ -37,6 +37,11 @@ CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
 # push) so the self-healing retry knows whether the device itself is signed in,
 # not just whether the HA-side user exists.
 CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
+# The CONF_DASHBOARD option that login carried. When the option changes, the two
+# differ, and setup pushes the login again with the new dashboard's URL. Absent
+# on an entry from before the option existed, which reads as DEFAULT_DASHBOARD,
+# so such an entry is not pushed again.
+CONF_KIOSK_DASHBOARD = "kiosk_dashboard"
 
 # SHA-256 of the device's TLS certificate, pinned when the entry is created.
 # Absent means an entry that predates TLS, which keeps talking cleartext to a
@@ -49,3 +54,11 @@ CONF_CERT_FINGERPRINT = "cert_fingerprint"
 # Poll fallback interval. The primary update path is the SSE push stream; this
 # is a safety net in case the stream drops without the socket erroring.
 POLL_INTERVAL = timedelta(seconds=60)
+
+# Options: the dashboard the device shows, by its url_path. DEFAULT_DASHBOARD
+# means Home Assistant's own default dashboard, i.e. its bare URL. Not "": the
+# frontend's select can read an empty value as nothing chosen, and no real
+# dashboard can be called "default", since Home Assistant requires a hyphen in
+# a dashboard's url_path.
+CONF_DASHBOARD = "dashboard"
+DEFAULT_DASHBOARD = "default"

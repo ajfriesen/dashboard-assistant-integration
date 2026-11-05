@@ -51,5 +51,19 @@
       "reauth_successful": "Re-authentication was successful",
       "wrong_device": "The token belongs to a different Dashboard Assistant device"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dashboard",
+        "description": "The dashboard this device shows. Admin-only dashboards are not listed, because the device signs in as a regular user.",
+        "data": {
+          "dashboard": "Dashboard"
+        },
+        "data_description": {
+          "dashboard": "Home Assistant default is the dashboard your Home Assistant opens on, the same as before you chose one."
+        }
+      }
+    }
   }
 }

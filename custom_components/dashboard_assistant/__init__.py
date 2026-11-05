@@ -15,7 +15,7 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_CERT_FINGERPRINT, CONF_KIOSK_PROVISIONED, LOGGER
+from .const import CONF_CERT_FINGERPRINT, LOGGER
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
@@ -23,6 +23,7 @@ from .coordinator import (
 from .provision import (
     async_deprovision_kiosk_login,
     async_provision_kiosk_login,
+    kiosk_login_is_current,
 )
 
 PLATFORMS: list[Platform] = [
@@ -83,16 +84,18 @@ async def async_setup_entry(
     # entity — so any manual retry — is unavailable while it is not, which is why a
     # one-shot at setup or a manual button couldn't recover a failed attempt.
     # Instead we re-attempt on each healthy coordinator refresh until the login has
-    # actually landed on the device (CONF_KIOSK_PROVISIONED), then stop.
+    # actually landed on the device (CONF_KIOSK_PROVISIONED), then stop. The same
+    # path re-pushes it when the dashboard option changed (CONF_KIOSK_DASHBOARD):
+    # the options flow reloads the entry, and setup finds the login out of date.
     # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
     # and the lock keeps overlapping refreshes from provisioning twice.
     provision_lock = asyncio.Lock()
 
     async def _ensure_kiosk_login() -> None:
-        if entry.data.get(CONF_KIOSK_PROVISIONED) or provision_lock.locked():
+        if kiosk_login_is_current(entry) or provision_lock.locked():
             return
         async with provision_lock:
-            if entry.data.get(CONF_KIOSK_PROVISIONED):
+            if kiosk_login_is_current(entry):
                 return
             try:
                 await async_provision_kiosk_login(hass, entry, client)
@@ -104,12 +107,12 @@ async def async_setup_entry(
 
     @callback
     def _reprovision_if_needed() -> None:
-        if coordinator.last_update_success and not entry.data.get(CONF_KIOSK_PROVISIONED):
+        if coordinator.last_update_success and not kiosk_login_is_current(entry):
             entry.async_create_background_task(
                 hass, _ensure_kiosk_login(), "dashboard_assistant_provision"
             )
 
-    if not entry.data.get(CONF_KIOSK_PROVISIONED):
+    if not kiosk_login_is_current(entry):
         entry.async_on_unload(coordinator.async_add_listener(_reprovision_if_needed))
         # Attempt immediately — the first refresh above already succeeded, so the
         # device is reachable and a healthy one is signed in before setup returns.

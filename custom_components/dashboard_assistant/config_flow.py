@@ -7,9 +7,22 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import (
@@ -22,13 +35,26 @@ from .api import (
     async_identify,
     async_pair,
 )
-from .const import CONF_CERT_FINGERPRINT, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_CERT_FINGERPRINT,
+    CONF_DASHBOARD,
+    DEFAULT_DASHBOARD,
+    DEFAULT_PORT,
+    DOMAIN,
+)
+from .provision import kiosk_dashboards
 
 
 class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Dashboard Assistant."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Which dashboard the device shows."""
+        return DashboardAssistantOptionsFlow()
 
     def __init__(self) -> None:
         self._host: str | None = None
@@ -326,4 +352,43 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
             errors=errors,
+        )
+
+
+class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
+    """Pick the dashboard the device shows.
+
+    A preference rather than connection data, so it lives here and not in the
+    config flow: pairing stays one click, and the choice can change at any
+    time. Saving reloads the entry, and setup pushes the kiosk login again with
+    the new dashboard's URL (see kiosk_login_is_current).
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        options = [
+            SelectOptionDict(value=DEFAULT_DASHBOARD, label="Home Assistant default")
+        ]
+        options += [
+            SelectOptionDict(value=url_path, label=title)
+            for url_path, title in sorted(
+                kiosk_dashboards(self.hass).items(), key=lambda item: item[1].lower()
+            )
+        ]
+        current = self.config_entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_DASHBOARD, default=current): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    )
+                }
+            ),
         )
