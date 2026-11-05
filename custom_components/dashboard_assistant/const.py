@@ -39,9 +39,8 @@ CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
 # so such an entry is not pushed again.
 CONF_KIOSK_DASHBOARD = "kiosk_dashboard"
 
-# SHA-256 of the device's TLS certificate, pinned when the entry is created.
-# Absent means an entry that predates TLS, which keeps talking cleartext to a
-# device that may also predate it -- see scheme_for/pin_for in api.py. Not a
+# SHA-256 of the device's TLS certificate, pinned when the device pairs; every
+# authenticated call is made over TLS against it (see pin_for in api.py). Not a
 # secret: it is a hash of a certificate the device shows to anyone who connects,
 # so it stays visible in diagnostics, where it is the first thing worth seeing
 # when a device stops connecting after a reset.

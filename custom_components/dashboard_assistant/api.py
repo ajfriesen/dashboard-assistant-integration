@@ -40,13 +40,8 @@ class DashboardAssistantCertMismatchError(DashboardAssistantError):
     """
 
 
-def scheme_for(fingerprint: str | None) -> str:
-    """https once a pin exists, http for a legacy entry that predates TLS."""
-    return "https" if fingerprint else "http"
-
-
-def pin_for(fingerprint: str | None) -> aiohttp.Fingerprint | bool:
-    """The per-request ``ssl`` argument for a given stored pin.
+def pin_for(fingerprint: str) -> aiohttp.Fingerprint:
+    """The per-request ``ssl`` argument for a device's pinned certificate.
 
     Per-request rather than per-session on purpose: Home Assistant shares one
     aiohttp connector process-wide, so a custom SSLContext on the session would
@@ -57,11 +52,7 @@ def pin_for(fingerprint: str | None) -> aiohttp.Fingerprint | bool:
     the certificate is self-signed and the device is reached at an IP that
     changes on DHCP renewal, so there is no chain and no hostname worth checking.
     The fingerprint identifies the machine instead.
-
-    ``False`` (no pin) means a legacy cleartext entry, where this is unused.
     """
-    if not fingerprint:
-        return False
     return aiohttp.Fingerprint(bytes.fromhex(fingerprint))
 
 
@@ -93,24 +84,18 @@ async def async_fetch_fingerprint(hass: Any, host: str, port: int) -> str:
 
 
 async def async_identify(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    fingerprint: str | None = None,
+    session: aiohttp.ClientSession, host: str, port: int
 ) -> dict[str, Any]:
-    """Fetch the device's stable identity (``node_id`` + ``name``).
+    """Fetch the device's stable identity (``node_id``, ``name``, ``tls_port``).
 
-    Unauthenticated and side-effect free — the config flow calls it during
-    zeroconf discovery to key on a stable id instead of the IP, so one device is
-    one Home Assistant entry regardless of address (or a later DHCP change).
+    Unauthenticated, side-effect free and in the clear, on the port the device
+    advertises over mDNS: the config flow calls it during discovery to key on a
+    stable id instead of the IP, so one device is one Home Assistant entry
+    regardless of address, and to learn where its TLS listener is.
     """
-    url = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha/identify"
+    url = f"http://{host}:{port}/api/ha/identify"
     try:
-        async with session.get(
-            url,
-            timeout=aiohttp.ClientTimeout(total=10),
-            ssl=pin_for(fingerprint),
-        ) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status >= 400:
                 text = await resp.text()
                 raise DashboardAssistantError(f"HTTP {resp.status}: {text.strip()}")
@@ -122,10 +107,7 @@ async def async_identify(
 
 
 async def async_pair(
-    session: aiohttp.ClientSession,
-    host: str,
-    port: int,
-    fingerprint: str | None = None,
+    session: aiohttp.ClientSession, host: str, port: int, fingerprint: str
 ) -> dict[str, Any]:
     """Fetch the API token from a device whose pairing window is open.
 
@@ -137,7 +119,7 @@ async def async_pair(
     have. Raises :class:`DashboardAssistantPairingClosedError` when the window
     is closed.
     """
-    url = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha/pair"
+    url = f"https://{host}:{port}/api/ha/pair"
     try:
         async with session.post(
             url,
@@ -170,13 +152,13 @@ class DashboardAssistantClient:
         host: str,
         port: int,
         token: str,
-        fingerprint: str | None = None,
+        fingerprint: str,
     ) -> None:
         self._session = session
         self._host = host
         self._port = port
         self._ssl = pin_for(fingerprint)
-        self._base = f"{scheme_for(fingerprint)}://{host}:{port}/api/ha"
+        self._base = f"https://{host}:{port}/api/ha"
         self._headers = {"Authorization": f"Bearer {token}"}
 
     @property

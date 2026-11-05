@@ -64,15 +64,15 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host: str | None = None
         self._port: int = DEFAULT_PORT
         self._name: str | None = None
-        # Pinned once, at the first contact with the device, and carried into the
-        # entry. None means the device advertised no TLS port, i.e. it predates
-        # TLS support and this entry stays cleartext.
+        # The device's certificate, pinned when the user confirms and carried
+        # into the entry.
         self._fingerprint: str | None = None
 
     async def _validate(
         self, host: str, port: int, token: str
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Return (info, error_code)."""
+        assert self._fingerprint is not None
         session = async_get_clientsession(self.hass)
         client = DashboardAssistantClient(
             session, host, port, token, self._fingerprint
@@ -86,25 +86,6 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         except DashboardAssistantError:
             return None, "cannot_connect"
         return info, None
-
-    async def _upgrade_to_tls(self, ident: dict[str, Any]) -> None:
-        """Pin the device's certificate, if it offers TLS.
-
-        The identify response is cleartext, so the advertised port is a hint, not
-        an assurance -- the pin itself comes from the handshake. A device that
-        advertises no TLS port predates it, and the entry stays cleartext rather
-        than failing to set up.
-        """
-        tls_port = ident.get("tls_port")
-        if not tls_port:
-            return
-        try:
-            self._fingerprint = await async_fetch_fingerprint(
-                self.hass, self._host, int(tls_port)
-            )
-            self._port = int(tls_port)
-        except DashboardAssistantError:
-            self._fingerprint = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -148,10 +129,20 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
         self._name = ident.get("name") or self._name
 
-        # Pin the certificate before anything secret moves: the pair call below
-        # hands over the device token, and kiosk_login later pushes a long-lived
-        # Home Assistant credential.
-        await self._upgrade_to_tls(ident)
+        # Pairing hands over the device token, and kiosk_login later pushes a
+        # long-lived Home Assistant credential, so neither may cross the network
+        # in the clear. A device that offers no TLS is not offered at all.
+        if not ident.get("tls_port"):
+            return self.async_abort(reason="tls_required")
+        self._port = int(ident["tls_port"])
+        # Read the certificate now, so a device whose TLS listener is not
+        # answering does not get a card that can never pair.
+        try:
+            self._fingerprint = await async_fetch_fingerprint(
+                self.hass, self._host, self._port
+            )
+        except DashboardAssistantError:
+            return self.async_abort(reason="cannot_connect")
 
         await self.async_set_unique_id(ident["node_id"])
         # Deliberately NOT updating the fingerprint here. This path rewrites entry
@@ -177,11 +168,20 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
             assert self._host is not None
             session = async_get_clientsession(self.hass)
             try:
+                # Pin the certificate the device has now. A card can wait for
+                # days, and a factory reset in between gives the device a new
+                # one; the pin taken at discovery would then fail every Submit.
+                # Confirming is the moment trust is actually given.
+                self._fingerprint = await async_fetch_fingerprint(
+                    self.hass, self._host, self._port
+                )
                 result = await async_pair(
                     session, self._host, self._port, self._fingerprint
                 )
             except DashboardAssistantPairingClosedError:
                 errors["base"] = "pairing_closed"
+            except DashboardAssistantCertMismatchError:
+                errors["base"] = "cert_mismatch"
             except DashboardAssistantError:
                 errors["base"] = "cannot_connect"
             else:

@@ -20,6 +20,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dashboard_assistant.const import (
+    CONF_CERT_FINGERPRINT,
     CONF_DASHBOARD,
     CONF_KIOSK_PROVISIONED,
     CONF_PAGES,
@@ -28,7 +29,7 @@ from custom_components.dashboard_assistant.const import (
 )
 from custom_components.dashboard_assistant.provision import kiosk_url
 
-from .conftest import BASE, HOST, PORT, TOKEN, mock_daemon
+from .conftest import BASE, FINGERPRINT, HOST, PORT, TOKEN, mock_daemon
 
 HA_URL = "http://ha.example:8123"
 
@@ -77,7 +78,13 @@ async def _setup(
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id=device_info["node_id"],
-        data={CONF_HOST: HOST, CONF_PORT: PORT, CONF_TOKEN: TOKEN, **data},
+        data={
+            CONF_HOST: HOST,
+            CONF_PORT: PORT,
+            CONF_TOKEN: TOKEN,
+            CONF_CERT_FINGERPRINT: FINGERPRINT,
+            **data,
+        },
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

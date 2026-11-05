@@ -49,11 +49,7 @@ async def async_setup_entry(
         entry.data[CONF_HOST],
         entry.data[CONF_PORT],
         entry.data[CONF_TOKEN],
-        # .get, not [], and no config-entry migration: an entry written before
-        # TLS has no pin, and absent is exactly the right meaning -- talk
-        # cleartext to a device that may also predate TLS. A migration could not
-        # invent a fingerprint anyway without contacting the device.
-        entry.data.get(CONF_CERT_FINGERPRINT),
+        entry.data[CONF_CERT_FINGERPRINT],
     )
 
     try:

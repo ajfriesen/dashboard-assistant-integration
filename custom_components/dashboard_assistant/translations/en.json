@@ -17,7 +17,8 @@
     "abort": {
       "already_configured": "This device is already configured",
       "cannot_connect": "Couldn't reach the device to identify it — it may still be starting up. It will be rediscovered automatically.",
-      "discovery_only": "Dashboard Assistant devices are added when Home Assistant discovers them: look for the device under Discovered in Settings → Devices & services. A device that is on your network but does not show up is usually blocked from mDNS by the network (for example a separate VLAN)."
+      "discovery_only": "Dashboard Assistant devices are added when Home Assistant discovers them: look for the device under Discovered in Settings → Devices & services. A device that is on your network but does not show up is usually blocked from mDNS by the network (for example a separate VLAN).",
+      "tls_required": "This device does not offer an encrypted connection, so it cannot pair. Update its OS, then it is discovered again."
     }
   },
   "options": {
