@@ -231,8 +231,8 @@ async def test_saving_pages_sends_the_whole_list_to_the_device(
             {"name": "", "url": "http://nvr.lan/live"},
         ]
     ]
-    # The device stays the one place the list lives: a seed file can replace it
-    # too, and a copy in the entry would go stale the moment one did.
+    # The device keeps the one copy of the list; a second one in the entry
+    # could only drift from it.
     assert entry.options == {CONF_DASHBOARD: DEFAULT_DASHBOARD}
 
 

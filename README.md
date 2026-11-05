@@ -76,10 +76,8 @@ you'll see a "Dashboard Assistant" discovered card under
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Dashboard Assistant** and select it.
 3. Enter the connection details:
-   - **API token** — the `api_token` from the `dashboard-assistant.yaml` seed
-     file the device was provisioned with (also in
-     `/var/lib/dashboard-assistant/api-token` on the device). The device never
-     displays it.
+   - **API token** — from `/var/lib/dashboard-assistant/api-token` on the
+     device. The device never displays it.
    - **Host / port** (manual setup only) — the device's IP or hostname; the API
      defaults to port **8081**.
 4. Submit. The kiosk appears as a single device with all its entities.

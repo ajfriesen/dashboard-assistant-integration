@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Dashboard Assistant",
-        "description": "Enter the address and API token of your Dashboard Assistant device. The device never displays its token — it is the api_token from the dashboard-assistant.yaml seed file you provisioned it with. Leave this to pairing instead if you can.",
+        "description": "Enter the address and API token of your Dashboard Assistant device. The device never displays its token; it is in /var/lib/dashboard-assistant/api-token on the device. Leave this to pairing instead if you can.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -26,14 +26,14 @@
       },
       "manual": {
         "title": "Dashboard Assistant",
-        "description": "Enter {name}'s API token — the api_token from the dashboard-assistant.yaml seed file it was provisioned with. The device never displays it.",
+        "description": "Enter {name}'s API token, from /var/lib/dashboard-assistant/api-token on the device. The device never displays it.",
         "data": {
           "token": "API token"
         }
       },
       "reauth_confirm": {
         "title": "Dashboard Assistant",
-        "description": "The device could not be verified. This usually means it was factory-reset, which regenerates both its API token and its security certificate. Enter the current api_token from its dashboard-assistant.yaml seed file, or remove this entry and re-add the device to pair again.",
+        "description": "The device could not be verified. This usually means it was factory-reset, which regenerates both its API token and its security certificate. Enter its current API token (in /var/lib/dashboard-assistant/api-token on the device), or remove this entry and re-add the device to pair again.",
         "data": {
           "token": "API token"
         }

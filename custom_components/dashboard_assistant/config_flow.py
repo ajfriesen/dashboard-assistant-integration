@@ -369,9 +369,9 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
     The two are kept differently. The dashboard is stored in the entry's
     options; saving reloads the entry, and setup pushes the kiosk login again
     with the new dashboard's URL (see kiosk_login_is_current). The pages are
-    not stored here at all: the device owns its page list, which a seed file
-    can also replace, so the form starts from what the device reports and
-    saving writes the list straight back to it.
+    not stored here at all: the device keeps the one copy of its page list,
+    so the form starts from what the device reports and saving writes the list
+    straight back to it.
     """
 
     async def async_step_init(
