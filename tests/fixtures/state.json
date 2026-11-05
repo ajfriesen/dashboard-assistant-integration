@@ -180,5 +180,14 @@
   "screenshot": {
     "available": true,
     "updated_at": 1789307312
+  },
+  "swap": {
+    "zram_total_mib": 994,
+    "zram_used_mib": 249,
+    "file_total_mib": 1023,
+    "file_used_mib": 16,
+    "swapped_in_mib": 18,
+    "swapped_out_mib": 250,
+    "oom_kills": 0
   }
 }
