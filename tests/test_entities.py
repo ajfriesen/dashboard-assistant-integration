@@ -33,6 +33,19 @@ async def test_conditional_entities_present(
     assert sendspin.state == "on"
     assert sendspin.attributes.get("status") == "active"
 
+    saver = hass.states.get(f"switch.{DEVICE_SLUG}_screen_saver")
+    assert saver is not None
+    assert saver.state == "off"
+
+    style = hass.states.get(f"select.{DEVICE_SLUG}_screen_saver_style")
+    assert style is not None
+    assert style.state == "clock"
+    assert style.attributes["options"] == ["clock", "logo"]
+
+    timeout = hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_timeout")
+    assert timeout is not None
+    assert float(timeout.state) == 10
+
 
 async def test_core_entities_present(
     hass: HomeAssistant, init_integration: Any, device_state: dict[str, Any]
@@ -68,12 +81,16 @@ async def test_absent_capabilities_create_no_entities(
     state["btrfs"] = {"present": False}
     state["battery"]["present"] = False
     state.pop("sendspin", None)
+    state.pop("screensaver", None)  # an OS build from before screen savers
 
     await setup_device(hass, aioclient_mock, info, state)
 
     assert hass.states.get(f"binary_sensor.{DEVICE_SLUG}_filesystem") is None
     assert hass.states.get(f"switch.{DEVICE_SLUG}_sendspin_player") is None
     assert hass.states.get(f"binary_sensor.{DEVICE_SLUG}_battery_charging") is None
+    assert hass.states.get(f"switch.{DEVICE_SLUG}_screen_saver") is None
+    assert hass.states.get(f"select.{DEVICE_SLUG}_screen_saver_style") is None
+    assert hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_timeout") is None
     # core entities are unaffected
     assert hass.states.get(f"switch.{DEVICE_SLUG}_dark_mode") is not None
 

@@ -40,6 +40,44 @@ async def test_sendspin_switch_drives_daemon(
     assert last_request_json(aioclient_mock) == {"on": True}
 
 
+async def test_screensaver_entities_drive_daemon(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
+) -> None:
+    aioclient_mock.post(f"{BASE}/screensaver", json=device_state, headers={"Content-Type": "application/json"})
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": f"switch.{DEVICE_SLUG}_screen_saver"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"active": True}
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": f"switch.{DEVICE_SLUG}_screen_saver"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"active": False}
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": f"select.{DEVICE_SLUG}_screen_saver_style", "option": "logo"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"name": "logo"}
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": f"number.{DEVICE_SLUG}_screen_saver_timeout", "value": 0},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"timeout": 0}
+
+
 async def test_display_light_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:

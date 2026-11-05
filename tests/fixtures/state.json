@@ -137,6 +137,15 @@
       270
     ]
   },
+  "screensaver": {
+    "active": false,
+    "current": "clock",
+    "options": [
+      "clock",
+      "logo"
+    ],
+    "timeout": 10
+  },
   "sendspin": {
     "on": true,
     "state": "active"
