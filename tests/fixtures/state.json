@@ -19,17 +19,19 @@
       "ToDo",
       "Grafana"
     ],
-    "slots": [
-      "Home | http://192.168.178.83:8123/home/overview",
-      "ToDo | http://192.168.178.83:8123/todo?entity_id=todo.einkaufsliste_2",
-      "Grafana | https://grafana.com/products/cloud/grafana/",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
+    "list": [
+      {
+        "name": "Home",
+        "url": "http://192.168.178.83:8123/home/overview"
+      },
+      {
+        "name": "ToDo",
+        "url": "http://192.168.178.83:8123/todo?entity_id=todo.einkaufsliste_2"
+      },
+      {
+        "name": "Grafana",
+        "url": "https://grafana.com/products/cloud/grafana/"
+      }
     ]
   },
   "touch_seconds": 3448,

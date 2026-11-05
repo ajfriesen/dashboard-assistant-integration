@@ -55,14 +55,31 @@
   "options": {
     "step": {
       "init": {
-        "title": "Dashboard",
-        "description": "The dashboard this device shows. Admin-only dashboards are not listed, because the device signs in as a regular user.",
+        "title": "Dashboard and pages",
+        "description": "The dashboard this device shows, and the pages you can switch it to. Admin-only dashboards are not listed, because the device signs in as a regular user.",
         "data": {
-          "dashboard": "Dashboard"
+          "dashboard": "Dashboard",
+          "pages": "Pages"
         },
         "data_description": {
-          "dashboard": "Home Assistant default is the dashboard your Home Assistant opens on, the same as before you chose one."
+          "dashboard": "Home Assistant default is the dashboard your Home Assistant opens on, the same as before you chose one.",
+          "pages": "Any website. The Page select switches between them, in this order."
         }
+      }
+    },
+    "error": {
+      "invalid_url": "Each page needs a full web address starting with http:// or https://.",
+      "cannot_connect": "Could not reach the device. Check it is on and try again."
+    },
+    "abort": {
+      "device_unavailable": "The device is not connected, so its pages cannot be shown. Try again once it is back online."
+    }
+  },
+  "selector": {
+    "pages": {
+      "fields": {
+        "name": "Name",
+        "url": "URL"
       }
     }
   }

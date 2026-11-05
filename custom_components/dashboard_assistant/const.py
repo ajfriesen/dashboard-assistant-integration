@@ -13,10 +13,6 @@ DEFAULT_PORT = 8081
 # mDNS service the device advertises (see modules/core/ha-api.nix).
 ZEROCONF_TYPE = "_dashboard-assistant._tcp.local."
 
-# Fixed number of editable "Page N" text slots the daemon exposes (mirrors
-# pageSlots in daemon/pages.go).
-PAGE_SLOTS = 10
-
 MANUFACTURER = "Dashboard Assistant"
 
 # Auto-provisioned kiosk login. The integration creates a dedicated Home Assistant
@@ -63,3 +59,7 @@ POLL_INTERVAL = timedelta(seconds=60)
 # show (lovelace, map, energy, ...).
 CONF_DASHBOARD = "dashboard"
 DEFAULT_DASHBOARD = "default"
+
+# The pages field of the options form: a list of {"name", "url"}. Never stored
+# in the entry; the device owns its page list (see DashboardAssistantOptionsFlow).
+CONF_PAGES = "pages"

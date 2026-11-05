@@ -14,7 +14,6 @@ The tablet appears as a Home Assistant device and can be controlled:
 - **Light** — the display: on/off (DPMS) plus brightness (backlight).
 - **Select** — jump to any configured page.
 - **Buttons** — next/previous page, reboot, shut down, take screenshot.
-- **Text** — ten editable "Page N" slots (`Name | URL`) to manage the page list.
 - **Select** — screen saver style (whatever the OS ships, e.g. clock, logo).
 - **Number** — browser zoom (25–400 %), and the screen saver timeout
   (minutes without a touch, 0–240; 0 turns the idle trigger off).
@@ -85,13 +84,19 @@ you'll see a "Dashboard Assistant" discovered card under
      defaults to port **8081**.
 4. Submit. The kiosk appears as a single device with all its entities.
 
-### 4. Choose the dashboard
+### 4. Choose the dashboard and pages
 
-The device shows Home Assistant's default dashboard until you pick another. Open
-**Settings → Devices & services → Dashboard Assistant**, click **Configure**, and
-choose a **Dashboard**. Saving sends the new dashboard to the device straight
-away. Admin-only dashboards are not listed, because the device signs in as a
-regular user.
+Open **Settings → Devices & services → Dashboard Assistant** and click
+**Configure**:
+
+- **Dashboard** — the device shows Home Assistant's default dashboard until you
+  pick another. Admin-only dashboards are not listed, because the device signs
+  in as a regular user.
+- **Pages** — any number of pages, each a name and the address of any website. The
+  **Page** select and the next/previous buttons switch between them, in this
+  order.
+
+Saving sends both to the device straight away.
 
 ### Updating
 

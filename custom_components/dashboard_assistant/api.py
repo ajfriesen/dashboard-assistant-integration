@@ -253,8 +253,9 @@ class DashboardAssistantClient:
             payload["dir"] = direction
         return await self._request("POST", "/page", payload)
 
-    async def async_set_page_slot(self, index: int, value: str) -> dict[str, Any]:
-        return await self._request("POST", "/page_slot", {"index": index, "value": value})
+    async def async_set_pages(self, pages: list[dict[str, str]]) -> dict[str, Any]:
+        """Replace the device's page list ({"name", "url"} each, in order)."""
+        return await self._request("POST", "/pages", {"pages": pages})
 
     async def async_set_zoom(self, percent: int) -> dict[str, Any]:
         return await self._request("POST", "/zoom", {"percent": percent})

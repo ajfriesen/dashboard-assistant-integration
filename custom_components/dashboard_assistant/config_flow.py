@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -18,6 +20,8 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    ObjectSelector,
+    ObjectSelectorConfig,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -38,6 +42,7 @@ from .api import (
 from .const import (
     CONF_CERT_FINGERPRINT,
     CONF_DASHBOARD,
+    CONF_PAGES,
     DEFAULT_DASHBOARD,
     DEFAULT_PORT,
     DOMAIN,
@@ -53,7 +58,7 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Which dashboard the device shows."""
+        """Which dashboard the device shows, and its pages."""
         return DashboardAssistantOptionsFlow()
 
     def __init__(self) -> None:
@@ -356,39 +361,113 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
-    """Pick the dashboard the device shows.
+    """Pick the dashboard the device shows, and edit its pages.
 
-    A preference rather than connection data, so it lives here and not in the
-    config flow: pairing stays one click, and the choice can change at any
-    time. Saving reloads the entry, and setup pushes the kiosk login again with
-    the new dashboard's URL (see kiosk_login_is_current).
+    Preferences rather than connection data, so they live here and not in the
+    config flow: pairing stays one click, and both can change at any time.
+
+    The two are kept differently. The dashboard is stored in the entry's
+    options; saving reloads the entry, and setup pushes the kiosk login again
+    with the new dashboard's URL (see kiosk_login_is_current). The pages are
+    not stored here at all: the device owns its page list, which a seed file
+    can also replace, so the form starts from what the device reports and
+    saving writes the list straight back to it.
     """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        if user_input is not None:
-            return self.async_create_entry(data=user_input)
+        entry = self.config_entry
+        if entry.state is not ConfigEntryState.LOADED:
+            # The pages come from the device, so there is nothing to show.
+            return self.async_abort(reason="device_unavailable")
+        coordinator = entry.runtime_data
 
-        options = [
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            pages = user_input.get(CONF_PAGES, [])
+            if error := _check_pages(pages):
+                errors[CONF_PAGES] = error
+            else:
+                try:
+                    await _write_pages(coordinator, pages)
+                except DashboardAssistantError:
+                    errors["base"] = "cannot_connect"
+                else:
+                    return self.async_create_entry(
+                        data={CONF_DASHBOARD: user_input[CONF_DASHBOARD]}
+                    )
+
+        dashboards = [
             SelectOptionDict(value=DEFAULT_DASHBOARD, label="Home Assistant default")
         ]
-        options += [
+        dashboards += [
             SelectOptionDict(value=url_path, label=title)
             for url_path, title in sorted(
                 kiosk_dashboards(self.hass).items(), key=lambda item: item[1].lower()
             )
         ]
-        current = self.config_entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+        if user_input is not None:
+            current = user_input[CONF_DASHBOARD]
+            pages = user_input.get(CONF_PAGES, [])
+        else:
+            current = entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+            pages = _device_pages(coordinator.data)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_DASHBOARD, default=current): SelectSelector(
                         SelectSelectorConfig(
-                            options=options, mode=SelectSelectorMode.DROPDOWN
+                            options=dashboards, mode=SelectSelectorMode.DROPDOWN
                         )
-                    )
+                    ),
+                    vol.Optional(CONF_PAGES, default=pages): ObjectSelector(
+                        ObjectSelectorConfig(
+                            fields={
+                                "name": {"selector": {"text": {}}},
+                                "url": {
+                                    "required": True,
+                                    "selector": {"text": {"type": "url"}},
+                                },
+                            },
+                            multiple=True,
+                            label_field="name",
+                            description_field="url",
+                            translation_key=CONF_PAGES,
+                        )
+                    ),
                 }
             ),
+            errors=errors,
         )
+
+
+def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:
+    """The device's page list, as it reports it."""
+    return [{"name": p["name"], "url": p["url"]} for p in data["page"]["list"]]
+
+
+def _clean(pages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [
+        {"name": str(p.get("name", "")).strip(), "url": str(p.get("url", "")).strip()}
+        for p in pages
+    ]
+
+
+def _check_pages(pages: list[dict[str, Any]]) -> str | None:
+    """The same check the device makes, so a refusal keeps the user in the form."""
+    for page in _clean(pages):
+        url = urlparse(page["url"])
+        if url.scheme not in ("http", "https") or not url.netloc:
+            return "invalid_url"
+    return None
+
+
+async def _write_pages(coordinator: Any, pages: list[dict[str, Any]]) -> None:
+    """Make the device's page list exactly ``pages``, in order."""
+    wanted = _clean(pages)
+    if wanted == _device_pages(coordinator.data):
+        return  # saving only the dashboard should not rewrite the pages
+    snapshot = await coordinator.client.async_set_pages(wanted)
+    coordinator.async_set_updated_data(snapshot)
