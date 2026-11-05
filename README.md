@@ -15,8 +15,11 @@ The tablet appears as a Home Assistant device and can be controlled:
 - **Select** — jump to any configured page.
 - **Buttons** — next/previous page, reboot, shut down, take screenshot.
 - **Text** — ten editable "Page N" slots (`Name | URL`) to manage the page list.
-- **Number** — browser zoom (25–400 %).
-- **Switch** — dark mode.
+- **Select** — screen saver style (whatever the OS ships, e.g. clock, logo).
+- **Number** — browser zoom (25–400 %), and the screen saver timeout
+  (minutes without a touch, 0–240; 0 turns the idle trigger off).
+- **Switch** — dark mode, and the screen saver (on shows it now, off
+  dismisses it; it also follows the idle timeout and touches).
 - **Update** — OS release, with an Install button on images that can self-update.
 - **Image** — the latest screenshot.
 - **Sensors** — seconds since last touch, memory, storage, generations, CPU,
@@ -74,7 +77,10 @@ you'll see a "Dashboard Assistant" discovered card under
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Dashboard Assistant** and select it.
 3. Enter the connection details:
-   - **API token** — shown on the device's **Config → Info** screen.
+   - **API token** — the `api_token` from the `dashboard-assistant.yaml` seed
+     file the device was provisioned with (also in
+     `/var/lib/dashboard-assistant/api-token` on the device). The device never
+     displays it.
    - **Host / port** (manual setup only) — the device's IP or hostname; the API
      defaults to port **8081**.
 4. Submit. The kiosk appears as a single device with all its entities.
