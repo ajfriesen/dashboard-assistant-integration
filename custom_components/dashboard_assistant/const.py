@@ -57,8 +57,9 @@ POLL_INTERVAL = timedelta(seconds=60)
 
 # Options: the dashboard the device shows, by its url_path. DEFAULT_DASHBOARD
 # means Home Assistant's own default dashboard, i.e. its bare URL. Not "": the
-# frontend's select can read an empty value as nothing chosen, and no real
-# dashboard can be called "default", since Home Assistant requires a hyphen in
-# a dashboard's url_path.
+# frontend's select can read an empty value as nothing chosen. No dashboard
+# can be called "default": Home Assistant requires a hyphen in the url_path of
+# a dashboard a user creates, and its built-in ones are named for what they
+# show (lovelace, map, energy, ...).
 CONF_DASHBOARD = "dashboard"
 DEFAULT_DASHBOARD = "default"
