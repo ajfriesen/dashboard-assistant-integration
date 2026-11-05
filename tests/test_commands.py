@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import BASE
+from .conftest import BASE, setup_device
 
 DEVICE_SLUG = "dashboard_assistant_d7bbb4"
 
@@ -115,3 +117,79 @@ async def test_dark_mode_switch_drives_daemon(
         blocking=True,
     )
     assert last_request_json(aioclient_mock) == {"dark": True}
+
+
+# --- recovery -----------------------------------------------------------------
+#
+# Recovery runs from Home Assistant, behind the device token: the device serves
+# nothing unauthenticated that could roll it back or reset it.
+
+
+async def test_roll_back_boots_the_generation_before_the_current_one(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any
+) -> None:
+    """The fixture device runs generation 6, so rolling back boots 5."""
+    aioclient_mock.post(
+        f"{BASE}/rollback",
+        json={"status": "rebooting", "generation": 5},
+        headers={"Content-Type": "application/json"},
+    )
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": f"button.{DEVICE_SLUG}_roll_back"},
+        blocking=True,
+    )
+
+    assert last_request_json(aioclient_mock) == {"generation": 5}
+
+
+async def test_roll_back_refuses_with_nothing_to_go_back_to(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """A freshly flashed device has one generation, and no earlier one to boot.
+
+    The button stays available, because available means the device answers;
+    the press is refused with the reason, and nothing reaches the device.
+    """
+    device_state["generation_list"] = device_state["generation_list"][:1]
+    device_state["generations"] = 1
+    await setup_device(hass, aioclient_mock, device_info, device_state)
+    entity_id = f"button.{DEVICE_SLUG}_roll_back"
+    calls_before = len(aioclient_mock.mock_calls)
+
+    assert hass.states.get(entity_id).state != "unavailable"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": entity_id}, blocking=True
+        )
+    assert len(aioclient_mock.mock_calls) == calls_before
+
+
+async def test_factory_reset_removes_the_entry(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any
+) -> None:
+    """A reset regenerates the device token, so the entry could never work again.
+
+    Removing it is what lets discovery offer the device again once it is back
+    on the network, where it pairs with no token typed.
+    """
+    aioclient_mock.post(
+        f"{BASE}/reset",
+        json={"status": "resetting"},
+        headers={"Content-Type": "application/json"},
+    )
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": f"button.{DEVICE_SLUG}_factory_reset"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert hass.config_entries.async_get_entry(init_integration.entry_id) is None

@@ -275,12 +275,16 @@ class DashboardAssistantClient:
         await self._request("POST", "/power", {"action": action})
 
     async def async_reset(self) -> None:
-        """Factory-reset the device: clear provisioning + reboot.
+        """Factory-reset the device: clear provisioning and Wi-Fi, then reboot.
 
-        The device regenerates its API token on the next boot, so this entry
-        stops working afterwards — it must be removed and the device re-added.
+        The device regenerates its API token on the next boot, so the entry
+        that sent this can never connect again.
         """
         await self._request("POST", "/reset")
+
+    async def async_roll_back(self, generation: int) -> None:
+        """Boot an earlier generation; the device switches to it and reboots."""
+        await self._request("POST", "/rollback", {"generation": generation})
 
     async def async_install_update(self) -> None:
         await self._request("POST", "/update")

@@ -10,7 +10,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect",
-      "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Factory-reset the device from its admin page, then try again.",
+      "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Reflash the device, then try again; next time, press its Factory reset button before removing it.",
       "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it.",
       "invalid_auth": "The device rejected the token it just handed over. Try again."
     },
@@ -50,6 +50,11 @@
         "name": "Name",
         "url": "URL"
       }
+    }
+  },
+  "exceptions": {
+    "no_earlier_generation": {
+      "message": "This device has only one system generation, so there is nothing to roll back to."
     }
   }
 }
