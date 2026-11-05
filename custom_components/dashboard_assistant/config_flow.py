@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
@@ -110,55 +109,12 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manual host + token entry."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self._host = user_input[CONF_HOST]
-            self._port = user_input[CONF_PORT]
+        """Devices are added from discovery, where they pair with no token typed.
 
-            # This path has no discovery, so ask the device directly whether it
-            # offers TLS. Without this a hand-added device would stay cleartext
-            # forever, which is the same exposure the feature exists to close.
-            # identify is unauthenticated, so it costs nothing and needs no token.
-            session = async_get_clientsession(self.hass)
-            try:
-                ident = await async_identify(session, self._host, self._port)
-            except DashboardAssistantError:
-                ident = None
-            if ident:
-                await self._upgrade_to_tls(ident)
-
-            info, error = await self._validate(
-                self._host,
-                self._port,
-                user_input[CONF_TOKEN],
-            )
-            if error:
-                errors["base"] = error
-            else:
-                await self.async_set_unique_id(info["node_id"])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_TOKEN): str,
-                }
-            ),
-            errors=errors,
-        )
+        There is nothing to ask for here: the token never leaves the device
+        except through pairing.
+        """
+        return self.async_abort(reason="discovery_only")
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
@@ -200,8 +156,8 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(ident["node_id"])
         # Deliberately NOT updating the fingerprint here. This path rewrites entry
         # data on rediscovery with no user interaction, so a spoofed mDNS record
-        # could otherwise silently re-pin a configured device. Re-pinning is
-        # reauth's job, where the user is present.
+        # could otherwise silently re-pin a configured device. A device whose
+        # certificate really changed (a factory reset) is deleted and re-added.
         self._abort_if_unique_id_configured(
             updates={CONF_HOST: self._host, CONF_PORT: self._port}
         )
@@ -211,151 +167,47 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Offer typing-free pairing, or manual token entry as a fallback."""
-        return self.async_show_menu(
-            step_id="zeroconf_confirm",
-            menu_options=["pair", "manual"],
-            description_placeholders={"name": self._name or self._host},
-        )
+        """Confirm adding the discovered device, then fetch its token by pairing.
 
-    async def async_step_pair(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Fetch the token from the device without anyone typing it.
-
-        Attempts pairing immediately — a fresh device pairs openly, so choosing
-        this option just works with no further click. An already-paired device
-        refuses, and has to have its old entry removed or be factory-reset
-        before Retry can succeed. Pairing is attempted on every entry (menu pick
-        and Retry alike), so it never gets stuck on an empty confirm form.
+        A fresh device pairs openly, so confirming just works. An already-paired
+        device refuses, and has to be factory-reset before Submit can succeed.
         """
         errors: dict[str, str] = {}
-        assert self._host is not None
-        session = async_get_clientsession(self.hass)
-        try:
-            result = await async_pair(
-                session, self._host, self._port, self._fingerprint
-            )
-        except DashboardAssistantPairingClosedError:
-            errors["base"] = "pairing_closed"
-        except DashboardAssistantError:
-            errors["base"] = "cannot_connect"
-        else:
-            token = result["token"]
-            info, error = await self._validate(self._host, self._port, token)
-            if error:
-                errors["base"] = error
+        if user_input is not None:
+            assert self._host is not None
+            session = async_get_clientsession(self.hass)
+            try:
+                result = await async_pair(
+                    session, self._host, self._port, self._fingerprint
+                )
+            except DashboardAssistantPairingClosedError:
+                errors["base"] = "pairing_closed"
+            except DashboardAssistantError:
+                errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(
-                    info["node_id"], raise_on_progress=False
-                )
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or self._name or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: token,
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
+                token = result["token"]
+                info, error = await self._validate(self._host, self._port, token)
+                if error:
+                    errors["base"] = error
+                else:
+                    await self.async_set_unique_id(
+                        info["node_id"], raise_on_progress=False
+                    )
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=info.get("name") or self._name or "Dashboard Assistant",
+                        data={
+                            CONF_HOST: self._host,
+                            CONF_PORT: self._port,
+                            CONF_TOKEN: token,
+                            CONF_CERT_FINGERPRINT: self._fingerprint,
+                        },
+                    )
 
         return self.async_show_form(
-            step_id="pair",
+            step_id="zeroconf_confirm",
             data_schema=vol.Schema({}),
             description_placeholders={"name": self._name or self._host},
-            errors=errors,
-        )
-
-    async def async_step_manual(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Fallback: type the token shown on the device's Config → Info screen."""
-        errors: dict[str, str] = {}
-        assert self._host is not None
-        if user_input is not None:
-            info, error = await self._validate(
-                self._host, self._port, user_input[CONF_TOKEN]
-            )
-            if error:
-                errors["base"] = error
-            else:
-                await self.async_set_unique_id(info["node_id"], raise_on_progress=False)
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or self._name or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="manual",
-            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
-            description_placeholders={"name": self._name or self._host},
-            errors=errors,
-        )
-
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
-    ) -> ConfigFlowResult:
-        """Handle re-authentication when the token or the certificate changed."""
-        self._host = entry_data[CONF_HOST]
-        self._port = entry_data[CONF_PORT]
-        self._fingerprint = entry_data.get(CONF_CERT_FINGERPRINT)
-        return await self.async_step_reauth_confirm()
-
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Collect a new token for an existing entry, and re-pin if needed.
-
-        This is also the re-pin path. A factory reset regenerates the device's
-        token *and* its certificate, so an entry recovering from one would
-        otherwise fail on the stale pin before the user could enter anything —
-        and a pin mismatch is indistinguishable from an attack by design, which
-        is why resolving it takes a deliberate, user-initiated step rather than
-        happening quietly on rediscovery.
-        """
-        errors: dict[str, str] = {}
-        reauth_entry = self._get_reauth_entry()
-        if user_input is not None:
-            # Re-read the certificate the device is presenting now. On an
-            # unchanged device this returns the pin already held.
-            if self._fingerprint:
-                try:
-                    self._fingerprint = await async_fetch_fingerprint(
-                        self.hass,
-                        reauth_entry.data[CONF_HOST],
-                        reauth_entry.data[CONF_PORT],
-                    )
-                except DashboardAssistantError:
-                    pass  # let _validate report the connection failure
-
-            info, error = await self._validate(
-                reauth_entry.data[CONF_HOST],
-                reauth_entry.data[CONF_PORT],
-                user_input[CONF_TOKEN],
-            )
-            if error:
-                errors["base"] = error
-            else:
-                await self.async_set_unique_id(info["node_id"])
-                self._abort_if_unique_id_mismatch(reason="wrong_device")
-                return self.async_update_reload_and_abort(
-                    reauth_entry,
-                    data_updates={
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
             errors=errors,
         )
 

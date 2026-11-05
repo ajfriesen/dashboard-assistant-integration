@@ -6,7 +6,7 @@ import asyncio
 
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -58,14 +58,16 @@ async def async_setup_entry(
 
     try:
         info = await client.async_get_info()
-    except DashboardAssistantCertMismatchError as err:
-        # The device is reachable but is not the one this entry pinned. Benignly,
-        # that means it was factory-reset and regenerated its certificate. Route
-        # to reauth, which re-pins -- ConfigEntryNotReady would retry forever
-        # against a mismatch that will never resolve itself.
-        raise ConfigEntryAuthFailed(str(err)) from err
-    except DashboardAssistantAuthError as err:
-        raise ConfigEntryAuthFailed(str(err)) from err
+    except (DashboardAssistantCertMismatchError, DashboardAssistantAuthError) as err:
+        # The device is reachable but no longer accepts this entry: benignly, it
+        # was factory-reset, which regenerates its token and its certificate.
+        # Nobody can type the new token, so there is nothing to ask for, and
+        # retrying would never succeed. Deleting the entry lets discovery offer
+        # the device again, and it pairs.
+        raise ConfigEntryError(
+            f"{err}. If the device was factory-reset, delete this entry; "
+            "Home Assistant then discovers the device again and pairs with it"
+        ) from err
     except DashboardAssistantError as err:
         raise ConfigEntryNotReady(str(err)) from err
 

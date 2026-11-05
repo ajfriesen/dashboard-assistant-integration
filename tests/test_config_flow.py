@@ -1,4 +1,4 @@
-"""Config flow: manual entry validates against the device and dedupes."""
+"""Config flow: a device is added from discovery, and pairs with no token typed."""
 
 from __future__ import annotations
 
@@ -8,97 +8,52 @@ from ipaddress import ip_address
 from typing import Any
 from unittest.mock import patch
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
+from homeassistant.const import CONF_PORT, CONF_TOKEN
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from custom_components.dashboard_assistant.api import pin_for, scheme_for
 from custom_components.dashboard_assistant.const import CONF_CERT_FINGERPRINT, DOMAIN
 
-from .conftest import BASE, HOST, PORT, TOKEN
+from .conftest import BASE, HOST, PORT
 
-USER_INPUT = {CONF_HOST: HOST, CONF_PORT: PORT, CONF_TOKEN: TOKEN}
+async def test_adding_by_hand_points_to_discovery(hass: HomeAssistant) -> None:
+    """A device is only ever added from discovery, which pairs it with no token.
 
-
-async def test_user_flow_creates_entry(
-    hass: HomeAssistant, aioclient_mock: Any, device_info: dict[str, Any]
-) -> None:
-    # The user step probes identify to find out whether the device offers TLS.
-    # This one answers without a tls_port, i.e. a device predating TLS.
-    aioclient_mock.get(f"{BASE}/identify", json={"node_id": device_info["node_id"]})
-    aioclient_mock.get(f"{BASE}/info", json=device_info, headers={"Content-Type": "application/json"})
-
+    Add integration has nothing to ask for: the token never leaves the device
+    except through pairing, so there is nothing a user could type.
+    """
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
-    assert result["type"] == "form"
 
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], USER_INPUT
-    )
-    assert result["type"] == "create_entry"
-    assert result["title"] == device_info["name"]
-    assert {k: v for k, v in result["data"].items() if k in USER_INPUT} == USER_INPUT
-    # a device without TLS records no pin
-    assert result["data"][CONF_CERT_FINGERPRINT] is None
-    assert result["result"].unique_id == device_info["node_id"]
+    assert result["type"] == "abort"
+    assert result["reason"] == "discovery_only"
 
 
-async def test_user_flow_bad_token(
-    hass: HomeAssistant, aioclient_mock: Any
-) -> None:
-    aioclient_mock.get(f"{BASE}/identify", exc=aiohttp.ClientError("no identify"))
-    aioclient_mock.get(f"{BASE}/info", status=401)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], USER_INPUT
-    )
-    assert result["type"] == "form"
-    assert result["errors"] == {"base": "invalid_auth"}
-
-
-async def test_user_flow_unreachable(
-    hass: HomeAssistant, aioclient_mock: Any
-) -> None:
-    aioclient_mock.get(f"{BASE}/identify", exc=aiohttp.ClientError("boom"))
-    aioclient_mock.get(f"{BASE}/info", exc=aiohttp.ClientError("boom"))
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], USER_INPUT
-    )
-    assert result["type"] == "form"
-    assert result["errors"] == {"base": "cannot_connect"}
-
-
-async def test_duplicate_device_aborts(
+async def test_a_paired_device_is_not_offered_again(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     init_integration: Any,
 ) -> None:
-    """A second flow for an already-configured node_id aborts."""
-    aioclient_mock.get(f"{BASE}/identify", json={"node_id": device_info["node_id"]})
+    """Rediscovering a configured device updates its address, with no new card."""
+    aioclient_mock.get(
+        f"{BASE}/identify",
+        json={"node_id": device_info["node_id"], "name": device_info["name"]},
+        headers={"Content-Type": "application/json"},
+    )
+
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
+        DOMAIN, context={"source": "zeroconf"}, data=_discovery()
     )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], USER_INPUT
-    )
+
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
 
 
-# --- discovery, pairing and reauth -------------------------------------------
-#
-# These paths carried no coverage at all, which is awkward given they are where
-# the token is obtained and where a device's identity is re-established after a
-# factory reset.
+# --- discovery and pairing ------------------------------------------------------
 
 
 def _discovery(host: str = HOST, port: int = PORT) -> ZeroconfServiceInfo:
@@ -114,10 +69,10 @@ def _discovery(host: str = HOST, port: int = PORT) -> ZeroconfServiceInfo:
     )
 
 
-async def test_zeroconf_offers_pair_or_manual(
+async def test_discovery_asks_to_confirm_the_device(
     hass: HomeAssistant, aioclient_mock: Any, device_info: dict[str, Any]
 ) -> None:
-    """Discovery identifies the device and offers the two ways in."""
+    """Discovery identifies the device and asks only to confirm adding it."""
     aioclient_mock.get(
         f"{BASE}/identify",
         json={"node_id": device_info["node_id"], "name": device_info["name"]},
@@ -128,8 +83,9 @@ async def test_zeroconf_offers_pair_or_manual(
         DOMAIN, context={"source": "zeroconf"}, data=_discovery()
     )
 
-    assert result["type"] == "menu"
-    assert set(result["menu_options"]) == {"pair", "manual"}
+    assert result["type"] == "form"
+    assert result["step_id"] == "zeroconf_confirm"
+    assert result["data_schema"].schema == {}
 
 
 async def test_zeroconf_aborts_when_identify_fails(
@@ -172,7 +128,7 @@ async def test_pair_creates_entry_without_typing_a_token(
         DOMAIN, context={"source": "zeroconf"}, data=_discovery()
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"next_step_id": "pair"}
+        result["flow_id"], {}
     )
 
     assert result["type"] == "create_entry"
@@ -195,85 +151,11 @@ async def test_pair_reports_a_closed_window(
         DOMAIN, context={"source": "zeroconf"}, data=_discovery()
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"next_step_id": "pair"}
+        result["flow_id"], {}
     )
 
     assert result["type"] == "form"
     assert result["errors"] == {"base": "pairing_closed"}
-
-
-async def test_manual_entry_after_discovery(
-    hass: HomeAssistant, aioclient_mock: Any, device_info: dict[str, Any]
-) -> None:
-    """The fallback path when pairing is not available."""
-    aioclient_mock.get(
-        f"{BASE}/identify",
-        json={"node_id": device_info["node_id"], "name": device_info["name"]},
-        headers={"Content-Type": "application/json"},
-    )
-    aioclient_mock.get(
-        f"{BASE}/info", json=device_info, headers={"Content-Type": "application/json"}
-    )
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "zeroconf"}, data=_discovery()
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"next_step_id": "manual"}
-    )
-    assert result["type"] == "form"
-
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_TOKEN: TOKEN}
-    )
-    assert result["type"] == "create_entry"
-    assert result["data"][CONF_TOKEN] == TOKEN
-
-
-async def test_reauth_updates_the_token(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    init_integration: Any,
-) -> None:
-    """A factory reset regenerates the token; reauth is how the entry recovers."""
-    aioclient_mock.clear_requests()
-    aioclient_mock.get(
-        f"{BASE}/info", json=device_info, headers={"Content-Type": "application/json"}
-    )
-
-    result = await init_integration.start_reauth_flow(hass)
-    assert result["type"] == "form"
-
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_TOKEN: "regenerated-token"}
-    )
-
-    assert result["type"] == "abort"
-    assert result["reason"] == "reauth_successful"
-    assert init_integration.data[CONF_TOKEN] == "regenerated-token"
-
-
-async def test_reauth_rejects_a_different_device(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    init_integration: Any,
-) -> None:
-    """Reauth against a device with another node_id must not silently re-point."""
-    other = dict(device_info, node_id="da_someotherdevice")
-    aioclient_mock.clear_requests()
-    aioclient_mock.get(
-        f"{BASE}/info", json=other, headers={"Content-Type": "application/json"}
-    )
-
-    result = await init_integration.start_reauth_flow(hass)
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_TOKEN: "some-token"}
-    )
-
-    assert result["type"] == "abort"
-    assert result["reason"] == "wrong_device"
 
 
 # --- TLS -----------------------------------------------------------------------
@@ -325,7 +207,7 @@ async def test_pairing_upgrades_to_tls_and_pins(
             DOMAIN, context={"source": "zeroconf"}, data=_discovery()
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "pair"}
+            result["flow_id"], {}
         )
 
     assert result["type"] == "create_entry"
@@ -361,7 +243,7 @@ async def test_device_without_tls_stays_cleartext(
         DOMAIN, context={"source": "zeroconf"}, data=_discovery()
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"next_step_id": "pair"}
+        result["flow_id"], {}
     )
 
     assert result["type"] == "create_entry"
@@ -406,7 +288,7 @@ async def test_certificate_mismatch_is_reported_as_itself(
             DOMAIN, context={"source": "zeroconf"}, data=_discovery()
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "pair"}
+            result["flow_id"], {}
         )
 
     assert result["type"] == "form"
@@ -423,36 +305,50 @@ def test_pin_helpers_pick_scheme_and_fingerprint() -> None:
     assert pin.fingerprint == bytes.fromhex(FINGERPRINT)
 
 
-async def test_manual_host_entry_upgrades_to_tls(
-    hass: HomeAssistant, aioclient_mock: Any, device_info: dict[str, Any]
+# --- after a factory reset ----------------------------------------------------
+#
+# A reset regenerates the device's token and certificate. Nobody can type the
+# new token (it never leaves the device except through pairing), so the entry
+# stops with an error instead of asking for one: deleting it lets discovery
+# offer the device again, and it pairs.
+
+
+async def _setup_against(
+    hass: HomeAssistant, aioclient_mock: Any, info_mock: dict[str, Any]
+) -> Any:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from .conftest import TOKEN
+
+    aioclient_mock.get(f"{BASE}/info", **info_mock)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="da_555d31459f86",
+        data={"host": HOST, CONF_PORT: PORT, CONF_TOKEN: TOKEN},
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_a_rejected_token_stops_the_entry_without_asking_for_one(
+    hass: HomeAssistant, aioclient_mock: Any
 ) -> None:
-    """Typing a host by hand must not silently opt out of encryption.
+    entry = await _setup_against(hass, aioclient_mock, {"status": 401})
 
-    The user step has no discovery, so it probes identify itself; without that a
-    hand-added device would stay cleartext forever.
-    """
-    aioclient_mock.get(
-        f"{BASE}/identify",
-        json={"node_id": device_info["node_id"], "tls_port": TLS_PORT},
-        headers={"Content-Type": "application/json"},
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert hass.config_entries.flow.async_progress() == []
+
+
+async def test_a_changed_certificate_stops_the_entry_without_asking_for_a_token(
+    hass: HomeAssistant, aioclient_mock: Any
+) -> None:
+    entry = await _setup_against(
+        hass,
+        aioclient_mock,
+        {"exc": aiohttp.ServerFingerprintMismatch(b"expected", b"got", HOST, PORT)},
     )
-    aioclient_mock.get(
-        f"{TLS_BASE}/info",
-        json=device_info,
-        headers={"Content-Type": "application/json"},
-    )
 
-    with patch(
-        "custom_components.dashboard_assistant.config_flow.async_fetch_fingerprint",
-        return_value=FINGERPRINT,
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], USER_INPUT
-        )
-
-    assert result["type"] == "create_entry"
-    assert result["data"][CONF_CERT_FINGERPRINT] == FINGERPRINT
-    assert result["data"][CONF_PORT] == TLS_PORT
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert hass.config_entries.flow.async_progress() == []

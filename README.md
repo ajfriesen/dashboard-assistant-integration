@@ -69,18 +69,20 @@ Waiting for this PR to get merged.
 
 ### 3. Add the device
 
-After the restart, Home Assistant should **auto-discover** the kiosk over mDNS —
-you'll see a "Dashboard Assistant" discovered card under
-**Settings → Devices & services**. If it doesn't appear, add it manually:
+After the restart, Home Assistant **discovers** the device over mDNS: a
+"Dashboard Assistant" card appears under **Settings → Devices & services →
+Discovered**. Click **Add**, then **Add** again. The device hands over its API
+token by itself, so there is nothing to type, and it appears as a single device
+with all its entities.
 
-1. Go to **Settings → Devices & services → Add integration**.
-2. Search for **Dashboard Assistant** and select it.
-3. Enter the connection details:
-   - **API token** — from `/var/lib/dashboard-assistant/api-token` on the
-     device. The device never displays it.
-   - **Host / port** (manual setup only) — the device's IP or hostname; the API
-     defaults to port **8081**.
-4. Submit. The kiosk appears as a single device with all its entities.
+Discovery is the only way in. If the card does not appear, Home Assistant cannot
+see the device's mDNS announcement, usually because the two are on different
+networks or VLANs.
+
+A device pairs once. To add it to another Home Assistant, or again after
+deleting its entry, factory-reset it from its admin page first. After a factory
+reset the old entry stops with an error; delete it, and the device is
+discovered again.
 
 ### 4. Choose the dashboard and pages
 
