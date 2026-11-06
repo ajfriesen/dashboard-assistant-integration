@@ -23,6 +23,7 @@ from custom_components.dashboard_assistant.const import (
     CONF_CERT_FINGERPRINT,
     CONF_DASHBOARD,
     CONF_KIOSK_PROVISIONED,
+    CONF_KIOSK_URL,
     CONF_PAGES,
     DEFAULT_DASHBOARD,
     DOMAIN,
@@ -105,7 +106,7 @@ async def test_options_offer_the_dashboards_the_kiosk_can_open(
     only ever show it an error.
     """
     entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True}
+        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL}
     )
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -124,7 +125,7 @@ async def test_choosing_a_dashboard_pushes_its_url_to_the_device(
     dashboards: None,
 ) -> None:
     entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True}
+        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL}
     )
     assert _kiosk_logins(aioclient_mock) == []
 
@@ -147,11 +148,35 @@ async def test_an_unchanged_entry_is_not_pushed_again(
     device_state: dict[str, Any],
     dashboards: None,
 ) -> None:
-    """An entry from before the option existed keeps working with no re-push."""
+    """A login for the URL Home Assistant would send now is not sent again."""
     await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True}
+        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL}
     )
     assert _kiosk_logins(aioclient_mock) == []
+
+
+async def test_a_new_home_assistant_url_is_pushed_to_the_device(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+) -> None:
+    """Changing Home Assistant's URL in its own settings re-points the device.
+
+    Nothing in the integration's options changes, so no reload happens; without
+    this the device keeps opening the old URL until Home Assistant restarts.
+    """
+    await _setup(
+        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL}
+    )
+    assert _kiosk_logins(aioclient_mock) == []
+
+    await hass.config.async_update(internal_url="http://ha-new.example:8123")
+    await hass.async_block_till_done()
+
+    logins = _kiosk_logins(aioclient_mock)
+    assert [login["ha_url"] for login in logins] == ["http://ha-new.example:8123"]
 
 
 async def test_the_default_dashboard_is_home_assistants_own_url(
@@ -188,7 +213,7 @@ async def _setup_with_pages(
         headers={"Content-Type": "application/json"},
     )
     return await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True}
+        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL}
     )
 
 

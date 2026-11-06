@@ -20,6 +20,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.dashboard_assistant.const import (
     CONF_CERT_FINGERPRINT,
     CONF_KIOSK_PROVISIONED,
+    CONF_KIOSK_URL,
     DOMAIN,
 )
 
@@ -30,6 +31,9 @@ TOKEN = "test-token"
 #: The authenticated API: TLS, pinned to the device's certificate.
 PORT = 8443
 FINGERPRINT = "a" * 64
+# The URL Home Assistant sends the kiosk in these tests; the entry already
+# holds a login for it, so setup does not push one.
+KIOSK_HA_URL = "http://ha.example:8123"
 BASE = f"https://{HOST}:{PORT}/api/ha"
 #: The port the device advertises over mDNS, where only the unauthenticated
 #: identify call is made, to learn the node id and the TLS port.
@@ -82,6 +86,7 @@ async def setup_device(
 ) -> MockConfigEntry:
     """Set up a config entry against the fake daemon and settle HA."""
     mock_daemon(aioclient_mock, info, state)
+    await hass.config.async_update(internal_url=KIOSK_HA_URL)
     entry = MockConfigEntry(
         domain=DOMAIN,
         title=info.get("name") or "Dashboard Assistant",
@@ -94,6 +99,7 @@ async def setup_device(
             # Skip the kiosk-login provisioning path — it talks to HA's auth
             # internals and is out of scope for entity/command tests.
             CONF_KIOSK_PROVISIONED: True,
+            CONF_KIOSK_URL: KIOSK_HA_URL,
         },
     )
     entry.add_to_hass(hass)
