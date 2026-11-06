@@ -63,6 +63,48 @@ SENSORS: tuple[DashboardAssistantSensorDescription, ...] = (
         icon="mdi:memory",
         value_fn=lambda s: s["memory"]["used_mib"],
     ),
+    # Swap: zram (compressed RAM) fills first, the swap file on flash only once
+    # zram is full, so the swap file's use is how often the device ran out of
+    # memory it could compress. Diagnostic, for working out whether a board has
+    # enough RAM.
+    DashboardAssistantSensorDescription(
+        key="zram_used",
+        name="Zram used",
+        native_unit_of_measurement=UnitOfInformation.MEBIBYTES,
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:memory",
+        value_fn=lambda s: s["swap"]["zram_used_mib"],
+    ),
+    DashboardAssistantSensorDescription(
+        key="swap_file_used",
+        name="Swap file used",
+        native_unit_of_measurement=UnitOfInformation.MEBIBYTES,
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:harddisk",
+        value_fn=lambda s: s["swap"]["file_used_mib"],
+    ),
+    DashboardAssistantSensorDescription(
+        key="swapped_out",
+        name="Swapped out",
+        native_unit_of_measurement=UnitOfInformation.MEBIBYTES,
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:swap-horizontal",
+        value_fn=lambda s: s["swap"]["swapped_out_mib"],
+    ),
+    DashboardAssistantSensorDescription(
+        key="oom_kills",
+        name="OOM kills",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:skull-crossbones",
+        value_fn=lambda s: s["swap"]["oom_kills"],
+    ),
     DashboardAssistantSensorDescription(
         key="disk_total",
         name="Storage total",

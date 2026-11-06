@@ -194,3 +194,23 @@ async def test_filesystem_sensor_reports_problem(
     assert fs is not None
     assert fs.state == "on"
     assert fs.attributes["corruption_errors"] == 3
+
+
+async def test_swap_sensors_tell_zram_from_the_swap_file(
+    hass: HomeAssistant, init_integration: Any
+) -> None:
+    """zram fills first, so the swap file's use is how often RAM ran out.
+
+    Kept in Home Assistant's history, these answer whether a 2 GB board ever
+    writes swap to flash, and whether the browser was killed for memory.
+    """
+    expected = {
+        "zram_used": "249",
+        "swap_file_used": "16",
+        "swapped_out": "250",
+        "oom_kills": "0",
+    }
+    for key, value in expected.items():
+        state = hass.states.get(f"sensor.{DEVICE_SLUG}_{key}")
+        assert state is not None, key
+        assert state.state == value, (key, state.state)
