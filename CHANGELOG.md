@@ -8,6 +8,35 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.0.0](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.3.0-rc.5...v1.0.0) (2026-11-06)
+
+
+### Features
+
+* add devices from discovery only, with no token screens ([58f3a26](https://github.com/ajfriesen/dashboard-assistant-integration/commit/58f3a26db3685c49412832c7e1253260b8401f9f))
+* choose the dashboard the device shows, in the options ([a37be07](https://github.com/ajfriesen/dashboard-assistant-integration/commit/a37be075d570fa822c02019bb793712c8cc50fc6))
+* control the device's screen saver ([a1c6427](https://github.com/ajfriesen/dashboard-assistant-integration/commit/a1c642706963943bf0af402081dff939d7828fca))
+* control the device's screen saver ([29c4282](https://github.com/ajfriesen/dashboard-assistant-integration/commit/29c4282a3110647d71fe8be968adf94ee24fa0ef))
+* dashboard and pages in the options, and add devices from discovery only ([8ddc4c7](https://github.com/ajfriesen/dashboard-assistant-integration/commit/8ddc4c7f07c7a7ea67435ace1f830389df2308d9))
+* edit the device's pages in the options instead of text entities ([2cd6e4a](https://github.com/ajfriesen/dashboard-assistant-integration/commit/2cd6e4a7df681c5382c48c9cb53787ddc7d69954))
+* report zram, the swap file and OOM kills as diagnostic sensors ([98e56a0](https://github.com/ajfriesen/dashboard-assistant-integration/commit/98e56a052aee4a52d42101c512fcf1e2432f1867))
+* report zram, the swap file and OOM kills as diagnostic sensors ([b9c5e00](https://github.com/ajfriesen/dashboard-assistant-integration/commit/b9c5e009447267d4065379bdfbf744fe94d4aeb5))
+* roll back from Home Assistant, and remove the entry after a factory reset ([e04c8c6](https://github.com/ajfriesen/dashboard-assistant-integration/commit/e04c8c6593ad08fcd93cee379e13b40ec6efcd01))
+* roll back from Home Assistant, and remove the entry after a factory reset ([59e5561](https://github.com/ajfriesen/dashboard-assistant-integration/commit/59e556155f35670d5d0b24250532c3d0a89f1163))
+
+
+### Bug Fixes
+
+* pin the certificate when the user adds a device, and require TLS ([73e9f89](https://github.com/ajfriesen/dashboard-assistant-integration/commit/73e9f8915afe3926c63bcb18772b58fb042e8270))
+* say that removing the entry does not reopen pairing ([a9fcf9c](https://github.com/ajfriesen/dashboard-assistant-integration/commit/a9fcf9c7df0c82c7113c312927b2da4910f380ad))
+* send the kiosk login again when Home Assistant's URL changes ([da38ccd](https://github.com/ajfriesen/dashboard-assistant-integration/commit/da38ccd128ab9ce5ff192cad457369de6610d6aa))
+* send the kiosk login again when Home Assistant's URL changes ([d01504e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/d01504e05ea656361af85f1ac7f81b4ca450c994))
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([edf1891](https://github.com/ajfriesen/dashboard-assistant-integration/commit/edf18914d91db1e18cdefb1507e0a18ac53093ae))
+
 ## [0.3.0-rc.5](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.2.0-rc.5...v0.3.0-rc.5) (2026-09-26)
 
 
