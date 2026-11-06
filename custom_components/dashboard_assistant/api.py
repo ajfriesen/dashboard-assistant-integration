@@ -268,6 +268,26 @@ class DashboardAssistantClient:
     async def async_set_sendspin(self, on: bool) -> dict[str, Any]:
         return await self._request("POST", "/sendspin", {"on": on})
 
+    async def async_set_screensaver(
+        self,
+        *,
+        active: bool | None = None,
+        name: str | None = None,
+        timeout: int | None = None,
+    ) -> dict[str, Any]:
+        """Start/stop the screen saver, pick which one, or set the idle timeout.
+
+        ``timeout`` is in minutes; 0 disables the idle trigger.
+        """
+        payload: dict[str, Any] = {}
+        if active is not None:
+            payload["active"] = active
+        if name is not None:
+            payload["name"] = name
+        if timeout is not None:
+            payload["timeout"] = timeout
+        return await self._request("POST", "/screensaver", payload)
+
     async def async_power(self, action: str) -> None:
         await self._request("POST", "/power", {"action": action})
 

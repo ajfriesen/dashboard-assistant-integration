@@ -1,10 +1,11 @@
-"""Page, display-rotation, and OS version selectors."""
+"""Page, display-rotation, screen saver, and OS version selectors."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -23,6 +24,8 @@ async def async_setup_entry(
         PageSelect(coordinator),
         RotationSelect(coordinator),
     ]
+    if "screensaver" in coordinator.data:
+        entities.append(ScreensaverSelect(coordinator))
     # The version picker only makes sense where the image can apply switches,
     # matching how the update entity gates its Install button. .get chain: a
     # daemon that reports no "update" block must not abort the platform.
@@ -78,6 +81,31 @@ class RotationSelect(DashboardAssistantEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         degrees = int(option.rstrip("°"))
         snapshot = await self.coordinator.client.async_set_rotation(degrees)
+        await self._run_command(snapshot)
+
+
+class ScreensaverSelect(DashboardAssistantEntity, SelectEntity):
+    """Which screen saver to show. The options are whatever the OS ships
+    (daemon/web/screensavers/), so new ones appear without an integration change.
+    Picking one while a saver is showing swaps it in straight away."""
+
+    _attr_name = "Screen saver style"
+    _attr_icon = "mdi:monitor-star"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "screensaver_style")
+
+    @property
+    def options(self) -> list[str]:
+        return list(self.data["screensaver"]["options"])
+
+    @property
+    def current_option(self) -> str | None:
+        return self.data["screensaver"]["current"] or None
+
+    async def async_select_option(self, option: str) -> None:
+        snapshot = await self.coordinator.client.async_set_screensaver(name=option)
         await self._run_command(snapshot)
 
 
