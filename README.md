@@ -79,10 +79,15 @@ Discovery is the only way in. If the card does not appear, Home Assistant cannot
 see the device's mDNS announcement, usually because the two are on different
 networks or VLANs.
 
-A device pairs once. To add it to another Home Assistant, or again after
-deleting its entry, factory-reset it from its admin page first. After a factory
-reset the old entry stops with an error; delete it, and the device is
-discovered again.
+A device pairs once. To move it to another Home Assistant, press its
+**Factory reset** button first: the device forgets its pairing and its Wi-Fi,
+and the entry is removed, so the device is discovered again once it is back on
+a network (a Wi-Fi device rejoins from the seed file on its boot medium, so
+write a new one if it is moving to another network). A device whose entry
+was deleted without a reset cannot pair again until it is reflashed.
+
+If an update misbehaves, the **Roll back** button boots the previous system
+generation. On a device that has only one, the press is refused.
 
 ### 4. Choose the dashboard and pages
 
