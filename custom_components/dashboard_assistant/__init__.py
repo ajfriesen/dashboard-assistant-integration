@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import asyncio
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_TOKEN,
+    EVENT_CORE_CONFIG_UPDATE,
+    Platform,
+)
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -81,18 +87,20 @@ async def async_setup_entry(
     # entity — so any manual retry — is unavailable while it is not, which is why a
     # one-shot at setup or a manual button couldn't recover a failed attempt.
     # Instead we re-attempt on each healthy coordinator refresh until the login has
-    # actually landed on the device (CONF_KIOSK_PROVISIONED), then stop. The same
-    # path re-pushes it when the dashboard option changed (CONF_KIOSK_DASHBOARD):
-    # the options flow reloads the entry, and setup finds the login out of date.
+    # actually landed on the device (CONF_KIOSK_PROVISIONED). The same path
+    # re-pushes it when the URL it carried (CONF_KIOSK_URL) is out of date: the
+    # dashboard option changed (the options flow reloads the entry, and setup
+    # finds it stale), or Home Assistant's own URL changed in its network
+    # settings, which reloads nothing, so that one is caught from the event.
     # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
     # and the lock keeps overlapping refreshes from provisioning twice.
     provision_lock = asyncio.Lock()
 
     async def _ensure_kiosk_login() -> None:
-        if kiosk_login_is_current(entry) or provision_lock.locked():
+        if kiosk_login_is_current(hass, entry) or provision_lock.locked():
             return
         async with provision_lock:
-            if kiosk_login_is_current(entry):
+            if kiosk_login_is_current(hass, entry):
                 return
             try:
                 await async_provision_kiosk_login(hass, entry, client)
@@ -103,17 +111,19 @@ async def async_setup_entry(
                 )
 
     @callback
-    def _reprovision_if_needed() -> None:
-        if coordinator.last_update_success and not kiosk_login_is_current(entry):
+    def _reprovision_if_needed(_event: Event | None = None) -> None:
+        if coordinator.last_update_success and not kiosk_login_is_current(hass, entry):
             entry.async_create_background_task(
                 hass, _ensure_kiosk_login(), "dashboard_assistant_provision"
             )
 
-    if not kiosk_login_is_current(entry):
-        entry.async_on_unload(coordinator.async_add_listener(_reprovision_if_needed))
-        # Attempt immediately — the first refresh above already succeeded, so the
-        # device is reachable and a healthy one is signed in before setup returns.
-        await _ensure_kiosk_login()
+    entry.async_on_unload(coordinator.async_add_listener(_reprovision_if_needed))
+    entry.async_on_unload(
+        hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, _reprovision_if_needed)
+    )
+    # Attempt immediately — the first refresh above already succeeded, so the
+    # device is reachable and a healthy one is signed in before setup returns.
+    await _ensure_kiosk_login()
 
     return True
 

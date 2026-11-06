@@ -33,11 +33,11 @@ CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
 # push) so the self-healing retry knows whether the device itself is signed in,
 # not just whether the HA-side user exists.
 CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
-# The CONF_DASHBOARD option that login carried. When the option changes, the two
-# differ, and setup pushes the login again with the new dashboard's URL. Absent
-# on an entry from before the option existed, which reads as DEFAULT_DASHBOARD,
-# so such an entry is not pushed again.
-CONF_KIOSK_DASHBOARD = "kiosk_dashboard"
+# The URL that login carried: Home Assistant's own URL plus the chosen
+# dashboard. Either can change (the CONF_DASHBOARD option, or the URL in Home
+# Assistant's network settings), and when the URL Home Assistant would send now
+# differs from this one, the login is pushed again.
+CONF_KIOSK_URL = "kiosk_url"
 
 # SHA-256 of the device's TLS certificate, pinned when the device pairs; every
 # authenticated call is made over TLS against it (see pin_for in api.py). Not a

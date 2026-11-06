@@ -26,9 +26,9 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 from .api import DashboardAssistantClient
 from .const import (
     CONF_DASHBOARD,
-    CONF_KIOSK_DASHBOARD,
     CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_REFRESH_TOKEN_ID,
+    CONF_KIOSK_URL,
     CONF_KIOSK_USER_ID,
     DEFAULT_DASHBOARD,
     KIOSK_USER_NAME,
@@ -121,34 +121,22 @@ async def async_provision_kiosk_login(
 
     access_token = hass.auth.async_create_access_token(refresh_token)
 
-    # Point the kiosk at this Home Assistant. Prefer the internal (LAN) URL — the
-    # kiosk is on the LAN — and fall back to whatever HA can resolve. If none is
-    # configured we still push the token and leave the device's own URL in place.
-    # The dashboard chosen in the options goes on the end.
     dashboard = entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
-    try:
-        base = get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
-    except NoURLAvailableError:
-        ha_url = None
-    else:
-        ha_url = kiosk_url(hass, base, dashboard)
+    if dashboard != DEFAULT_DASHBOARD and dashboard not in kiosk_dashboards(hass):
+        LOGGER.warning(
+            "Dashboard %s no longer exists; the device shows the default one", dashboard
+        )
+    ha_url = wanted_kiosk_url(hass, entry)
 
     # If this raises, the user/token are already recorded above, so the retry
     # re-pushes without duplicating; the provisioned flag is set only once the
     # push has actually landed, and is what stops the self-healing retry loop.
     await client.async_kiosk_login(access_token, ha_url)
 
-    if (
-        not entry.data.get(CONF_KIOSK_PROVISIONED)
-        or entry.data.get(CONF_KIOSK_DASHBOARD, DEFAULT_DASHBOARD) != dashboard
-    ):
+    if not entry.data.get(CONF_KIOSK_PROVISIONED) or entry.data.get(CONF_KIOSK_URL) != ha_url:
         hass.config_entries.async_update_entry(
             entry,
-            data={
-                **entry.data,
-                CONF_KIOSK_PROVISIONED: True,
-                CONF_KIOSK_DASHBOARD: dashboard,
-            },
+            data={**entry.data, CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: ha_url},
         )
     LOGGER.info("Provisioned kiosk login for user %s", user.id)
 
@@ -163,11 +151,33 @@ async def async_deprovision_kiosk_login(
             LOGGER.info("Removed kiosk user %s", user_id)
 
 
-def kiosk_login_is_current(entry: DashboardAssistantConfigEntry) -> bool:
-    """Whether the device holds a login for the dashboard the options name."""
+def wanted_kiosk_url(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
+) -> str | None:
+    """The URL the device should open now, or None if Home Assistant has none.
+
+    Prefers the internal (LAN) URL, since the kiosk is on the LAN, and falls
+    back to whatever Home Assistant can resolve. With none configured the login
+    still goes out, and the device keeps the URL it has.
+    """
+    try:
+        base = get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
+    except NoURLAvailableError:
+        return None
+    return kiosk_url(hass, base, entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD))
+
+
+def kiosk_login_is_current(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
+) -> bool:
+    """Whether the device holds a login for the URL Home Assistant would send.
+
+    That URL changes with the dashboard option and with Home Assistant's own
+    network settings; either one makes the login stale.
+    """
     return bool(entry.data.get(CONF_KIOSK_PROVISIONED)) and entry.data.get(
-        CONF_KIOSK_DASHBOARD, DEFAULT_DASHBOARD
-    ) == entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+        CONF_KIOSK_URL
+    ) == wanted_kiosk_url(hass, entry)
 
 
 def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
@@ -195,13 +205,9 @@ def kiosk_url(hass: HomeAssistant, base: str, dashboard: str) -> str:
     """The URL the device opens: Home Assistant's, plus the chosen dashboard.
 
     A dashboard deleted since it was chosen falls back to the default one, so
-    the device does not sit on an error page.
+    the device does not sit on an error page. This runs on every refresh, so it
+    does not log; the push does.
     """
-    if dashboard == DEFAULT_DASHBOARD:
-        return base
-    if dashboard not in kiosk_dashboards(hass):
-        LOGGER.warning(
-            "Dashboard %s no longer exists; the device shows the default one", dashboard
-        )
+    if dashboard == DEFAULT_DASHBOARD or dashboard not in kiosk_dashboards(hass):
         return base
     return f"{base.rstrip('/')}/{dashboard}"
