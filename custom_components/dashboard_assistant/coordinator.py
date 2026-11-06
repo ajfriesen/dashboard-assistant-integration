@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -53,7 +53,8 @@ class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             return await self.client.async_get_state()
         except DashboardAssistantAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            # Not reauth: nobody can type the device's token (see async_setup_entry).
+            raise ConfigEntryError(str(err)) from err
         except DashboardAssistantError as err:
             raise UpdateFailed(str(err)) from err
 
@@ -73,7 +74,7 @@ class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.async_set_updated_data(snapshot)
                     backoff = 1
             except DashboardAssistantAuthError:
-                # A bad token won't fix itself; let the poll path raise reauth.
+                # A bad token won't fix itself; the poll path reports it.
                 LOGGER.warning("SSE stream rejected the token; falling back to polling")
                 return
             except Exception as err:  # noqa: BLE001

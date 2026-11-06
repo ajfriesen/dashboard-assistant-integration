@@ -18,14 +18,19 @@ from datetime import timedelta
 
 from homeassistant.auth.const import GROUP_ID_USER
 from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
+from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import DashboardAssistantClient
 from .const import (
+    CONF_DASHBOARD,
+    CONF_KIOSK_DASHBOARD,
     CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_REFRESH_TOKEN_ID,
     CONF_KIOSK_USER_ID,
+    DEFAULT_DASHBOARD,
     KIOSK_USER_NAME,
     LOGGER,
 )
@@ -119,19 +124,31 @@ async def async_provision_kiosk_login(
     # Point the kiosk at this Home Assistant. Prefer the internal (LAN) URL — the
     # kiosk is on the LAN — and fall back to whatever HA can resolve. If none is
     # configured we still push the token and leave the device's own URL in place.
+    # The dashboard chosen in the options goes on the end.
+    dashboard = entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
     try:
-        ha_url = get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
+        base = get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
     except NoURLAvailableError:
         ha_url = None
+    else:
+        ha_url = kiosk_url(hass, base, dashboard)
 
     # If this raises, the user/token are already recorded above, so the retry
     # re-pushes without duplicating; the provisioned flag is set only once the
     # push has actually landed, and is what stops the self-healing retry loop.
     await client.async_kiosk_login(access_token, ha_url)
 
-    if not entry.data.get(CONF_KIOSK_PROVISIONED):
+    if (
+        not entry.data.get(CONF_KIOSK_PROVISIONED)
+        or entry.data.get(CONF_KIOSK_DASHBOARD, DEFAULT_DASHBOARD) != dashboard
+    ):
         hass.config_entries.async_update_entry(
-            entry, data={**entry.data, CONF_KIOSK_PROVISIONED: True}
+            entry,
+            data={
+                **entry.data,
+                CONF_KIOSK_PROVISIONED: True,
+                CONF_KIOSK_DASHBOARD: dashboard,
+            },
         )
     LOGGER.info("Provisioned kiosk login for user %s", user.id)
 
@@ -144,3 +161,47 @@ async def async_deprovision_kiosk_login(
         if user := await hass.auth.async_get_user(user_id):
             await hass.auth.async_remove_user(user)
             LOGGER.info("Removed kiosk user %s", user_id)
+
+
+def kiosk_login_is_current(entry: DashboardAssistantConfigEntry) -> bool:
+    """Whether the device holds a login for the dashboard the options name."""
+    return bool(entry.data.get(CONF_KIOSK_PROVISIONED)) and entry.data.get(
+        CONF_KIOSK_DASHBOARD, DEFAULT_DASHBOARD
+    ) == entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+
+
+def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
+    """The dashboards the kiosk can open, as {url_path: title}.
+
+    Leaves out Home Assistant's default dashboard, which the options offer
+    separately as its bare URL, and admin-only ones: the kiosk signs in as a
+    non-admin user, so it could only ever show an error for those.
+    """
+    data = hass.data.get(LOVELACE_DATA)
+    if data is None:
+        return {}
+    found: dict[str, str] = {}
+    for url_path, dashboard in data.dashboards.items():
+        config = dashboard.config
+        if not url_path or url_path == LOVELACE_DOMAIN or not config:
+            continue
+        if config.get("require_admin"):
+            continue
+        found[url_path] = config.get("title") or url_path
+    return found
+
+
+def kiosk_url(hass: HomeAssistant, base: str, dashboard: str) -> str:
+    """The URL the device opens: Home Assistant's, plus the chosen dashboard.
+
+    A dashboard deleted since it was chosen falls back to the default one, so
+    the device does not sit on an error page.
+    """
+    if dashboard == DEFAULT_DASHBOARD:
+        return base
+    if dashboard not in kiosk_dashboards(hass):
+        LOGGER.warning(
+            "Dashboard %s no longer exists; the device shows the default one", dashboard
+        )
+        return base
+    return f"{base.rstrip('/')}/{dashboard}"

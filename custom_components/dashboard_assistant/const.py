@@ -13,10 +13,6 @@ DEFAULT_PORT = 8081
 # mDNS service the device advertises (see modules/core/ha-api.nix).
 ZEROCONF_TYPE = "_dashboard-assistant._tcp.local."
 
-# Fixed number of editable "Page N" text slots the daemon exposes (mirrors
-# pageSlots in daemon/pages.go).
-PAGE_SLOTS = 10
-
 MANUFACTURER = "Dashboard Assistant"
 
 # Auto-provisioned kiosk login. The integration creates a dedicated Home Assistant
@@ -37,10 +33,14 @@ CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
 # push) so the self-healing retry knows whether the device itself is signed in,
 # not just whether the HA-side user exists.
 CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
+# The CONF_DASHBOARD option that login carried. When the option changes, the two
+# differ, and setup pushes the login again with the new dashboard's URL. Absent
+# on an entry from before the option existed, which reads as DEFAULT_DASHBOARD,
+# so such an entry is not pushed again.
+CONF_KIOSK_DASHBOARD = "kiosk_dashboard"
 
-# SHA-256 of the device's TLS certificate, pinned when the entry is created.
-# Absent means an entry that predates TLS, which keeps talking cleartext to a
-# device that may also predate it -- see scheme_for/pin_for in api.py. Not a
+# SHA-256 of the device's TLS certificate, pinned when the device pairs; every
+# authenticated call is made over TLS against it (see pin_for in api.py). Not a
 # secret: it is a hash of a certificate the device shows to anyone who connects,
 # so it stays visible in diagnostics, where it is the first thing worth seeing
 # when a device stops connecting after a reset.
@@ -49,3 +49,16 @@ CONF_CERT_FINGERPRINT = "cert_fingerprint"
 # Poll fallback interval. The primary update path is the SSE push stream; this
 # is a safety net in case the stream drops without the socket erroring.
 POLL_INTERVAL = timedelta(seconds=60)
+
+# Options: the dashboard the device shows, by its url_path. DEFAULT_DASHBOARD
+# means Home Assistant's own default dashboard, i.e. its bare URL. Not "": the
+# frontend's select can read an empty value as nothing chosen. No dashboard
+# can be called "default": Home Assistant requires a hyphen in the url_path of
+# a dashboard a user creates, and its built-in ones are named for what they
+# show (lovelace, map, energy, ...).
+CONF_DASHBOARD = "dashboard"
+DEFAULT_DASHBOARD = "default"
+
+# The pages field of the options form: a list of {"name", "url"}. Never stored
+# in the entry; the device owns its page list (see DashboardAssistantOptionsFlow).
+CONF_PAGES = "pages"

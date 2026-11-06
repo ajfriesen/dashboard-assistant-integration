@@ -2,54 +2,54 @@
   "config": {
     "flow_title": "{name}",
     "step": {
-      "user": {
-        "title": "Dashboard Assistant",
-        "description": "Enter the address and API token of your Dashboard Assistant device. The device never displays its token — it is the api_token from the dashboard-assistant.yaml seed file you provisioned it with. Leave this to pairing instead if you can.",
-        "data": {
-          "host": "Host",
-          "port": "Port",
-          "token": "API token"
-        }
-      },
       "zeroconf_confirm": {
-        "title": "Dashboard Assistant",
-        "description": "Add {name}? Pair automatically so you don't have to copy the token, or enter it by hand.",
-        "menu_options": {
-          "pair": "Pair automatically (recommended)",
-          "manual": "Enter the token manually"
-        }
-      },
-      "pair": {
-        "title": "Pair with {name}",
-        "description": "Couldn't pair automatically. A device hands out its token only once, and removing its Home Assistant entry does not change that. Choose \"Enter the token manually\" instead (it is in /var/lib/dashboard-assistant/api-token on the device), or factory-reset the device from its admin page and retry. (A brand-new device pairs on its own.)",
-        "submit": "Retry"
-      },
-      "manual": {
-        "title": "Dashboard Assistant",
-        "description": "Enter {name}'s API token — the api_token from the dashboard-assistant.yaml seed file it was provisioned with. The device never displays it.",
-        "data": {
-          "token": "API token"
-        }
-      },
-      "reauth_confirm": {
-        "title": "Dashboard Assistant",
-        "description": "The device could not be verified. This usually means it was factory-reset, which regenerates both its API token and its security certificate. Enter the current api_token from its dashboard-assistant.yaml seed file, or remove this entry and re-add the device to pair again.",
-        "data": {
-          "token": "API token"
-        }
+        "title": "Add {name}",
+        "description": "Add {name} to Home Assistant? It pairs by itself, with nothing to type.",
+        "submit": "Add"
       }
     },
     "error": {
       "cannot_connect": "Failed to connect",
-      "invalid_auth": "Invalid API token",
-      "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Enter its token manually, or factory-reset the device from its admin page, then try again.",
-      "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it."
+      "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Factory-reset the device from its admin page, then try again.",
+      "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it.",
+      "invalid_auth": "The device rejected the token it just handed over. Try again."
     },
     "abort": {
       "already_configured": "This device is already configured",
       "cannot_connect": "Couldn't reach the device to identify it — it may still be starting up. It will be rediscovered automatically.",
-      "reauth_successful": "Re-authentication was successful",
-      "wrong_device": "The token belongs to a different Dashboard Assistant device"
+      "discovery_only": "Dashboard Assistant devices are added when Home Assistant discovers them: look for the device under Discovered in Settings → Devices & services. A device that is on your network but does not show up is usually blocked from mDNS by the network (for example a separate VLAN).",
+      "tls_required": "This device does not offer an encrypted connection, so it cannot pair. Update its OS, then it is discovered again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dashboard and pages",
+        "description": "The dashboard this device shows, and the pages you can switch it to. Admin-only dashboards are not listed, because the device signs in as a regular user.",
+        "data": {
+          "dashboard": "Dashboard",
+          "pages": "Pages"
+        },
+        "data_description": {
+          "dashboard": "Home Assistant default is the dashboard your Home Assistant opens on, the same as before you chose one.",
+          "pages": "Any website. The Page select switches between them, in this order."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Each page needs a full web address starting with http:// or https://.",
+      "cannot_connect": "Could not reach the device. Check it is on and try again."
+    },
+    "abort": {
+      "device_unavailable": "The device is not connected, so its pages cannot be shown. Try again once it is back online."
+    }
+  },
+  "selector": {
+    "pages": {
+      "fields": {
+        "name": "Name",
+        "url": "URL"
+      }
     }
   }
 }

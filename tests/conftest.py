@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dashboard_assistant.const import (
+    CONF_CERT_FINGERPRINT,
     CONF_KIOSK_PROVISIONED,
     DOMAIN,
 )
@@ -25,9 +26,15 @@ from custom_components.dashboard_assistant.const import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 HOST = "192.0.2.10"
-PORT = 8081
 TOKEN = "test-token"
-BASE = f"http://{HOST}:{PORT}/api/ha"
+#: The authenticated API: TLS, pinned to the device's certificate.
+PORT = 8443
+FINGERPRINT = "a" * 64
+BASE = f"https://{HOST}:{PORT}/api/ha"
+#: The port the device advertises over mDNS, where only the unauthenticated
+#: identify call is made, to learn the node id and the TLS port.
+DISCOVERY_PORT = 8081
+DISCOVERY_BASE = f"http://{HOST}:{DISCOVERY_PORT}/api/ha"
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +90,7 @@ async def setup_device(
             CONF_HOST: HOST,
             CONF_PORT: PORT,
             CONF_TOKEN: TOKEN,
+            CONF_CERT_FINGERPRINT: FINGERPRINT,
             # Skip the kiosk-login provisioning path — it talks to HA's auth
             # internals and is out of scope for entity/command tests.
             CONF_KIOSK_PROVISIONED: True,

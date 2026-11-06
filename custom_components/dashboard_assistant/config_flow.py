@@ -3,13 +3,29 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigEntryState,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    ObjectSelector,
+    ObjectSelectorConfig,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import (
@@ -22,7 +38,15 @@ from .api import (
     async_identify,
     async_pair,
 )
-from .const import CONF_CERT_FINGERPRINT, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_CERT_FINGERPRINT,
+    CONF_DASHBOARD,
+    CONF_PAGES,
+    DEFAULT_DASHBOARD,
+    DEFAULT_PORT,
+    DOMAIN,
+)
+from .provision import kiosk_dashboards
 
 
 class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -30,19 +54,25 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Which dashboard the device shows, and its pages."""
+        return DashboardAssistantOptionsFlow()
+
     def __init__(self) -> None:
         self._host: str | None = None
         self._port: int = DEFAULT_PORT
         self._name: str | None = None
-        # Pinned once, at the first contact with the device, and carried into the
-        # entry. None means the device advertised no TLS port, i.e. it predates
-        # TLS support and this entry stays cleartext.
+        # The device's certificate, pinned when the user confirms and carried
+        # into the entry.
         self._fingerprint: str | None = None
 
     async def _validate(
         self, host: str, port: int, token: str
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Return (info, error_code)."""
+        assert self._fingerprint is not None
         session = async_get_clientsession(self.hass)
         client = DashboardAssistantClient(
             session, host, port, token, self._fingerprint
@@ -57,77 +87,15 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
             return None, "cannot_connect"
         return info, None
 
-    async def _upgrade_to_tls(self, ident: dict[str, Any]) -> None:
-        """Pin the device's certificate, if it offers TLS.
-
-        The identify response is cleartext, so the advertised port is a hint, not
-        an assurance -- the pin itself comes from the handshake. A device that
-        advertises no TLS port predates it, and the entry stays cleartext rather
-        than failing to set up.
-        """
-        tls_port = ident.get("tls_port")
-        if not tls_port:
-            return
-        try:
-            self._fingerprint = await async_fetch_fingerprint(
-                self.hass, self._host, int(tls_port)
-            )
-            self._port = int(tls_port)
-        except DashboardAssistantError:
-            self._fingerprint = None
-
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manual host + token entry."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self._host = user_input[CONF_HOST]
-            self._port = user_input[CONF_PORT]
+        """Devices are added from discovery, where they pair with no token typed.
 
-            # This path has no discovery, so ask the device directly whether it
-            # offers TLS. Without this a hand-added device would stay cleartext
-            # forever, which is the same exposure the feature exists to close.
-            # identify is unauthenticated, so it costs nothing and needs no token.
-            session = async_get_clientsession(self.hass)
-            try:
-                ident = await async_identify(session, self._host, self._port)
-            except DashboardAssistantError:
-                ident = None
-            if ident:
-                await self._upgrade_to_tls(ident)
-
-            info, error = await self._validate(
-                self._host,
-                self._port,
-                user_input[CONF_TOKEN],
-            )
-            if error:
-                errors["base"] = error
-            else:
-                await self.async_set_unique_id(info["node_id"])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_TOKEN): str,
-                }
-            ),
-            errors=errors,
-        )
+        There is nothing to ask for here: the token never leaves the device
+        except through pairing.
+        """
+        return self.async_abort(reason="discovery_only")
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
@@ -161,16 +129,26 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
         self._name = ident.get("name") or self._name
 
-        # Pin the certificate before anything secret moves: the pair call below
-        # hands over the device token, and kiosk_login later pushes a long-lived
-        # Home Assistant credential.
-        await self._upgrade_to_tls(ident)
+        # Pairing hands over the device token, and kiosk_login later pushes a
+        # long-lived Home Assistant credential, so neither may cross the network
+        # in the clear. A device that offers no TLS is not offered at all.
+        if not ident.get("tls_port"):
+            return self.async_abort(reason="tls_required")
+        self._port = int(ident["tls_port"])
+        # Read the certificate now, so a device whose TLS listener is not
+        # answering does not get a card that can never pair.
+        try:
+            self._fingerprint = await async_fetch_fingerprint(
+                self.hass, self._host, self._port
+            )
+        except DashboardAssistantError:
+            return self.async_abort(reason="cannot_connect")
 
         await self.async_set_unique_id(ident["node_id"])
         # Deliberately NOT updating the fingerprint here. This path rewrites entry
         # data on rediscovery with no user interaction, so a spoofed mDNS record
-        # could otherwise silently re-pin a configured device. Re-pinning is
-        # reauth's job, where the user is present.
+        # could otherwise silently re-pin a configured device. A device whose
+        # certificate really changed (a factory reset) is deleted and re-added.
         self._abort_if_unique_id_configured(
             updates={CONF_HOST: self._host, CONF_PORT: self._port}
         )
@@ -180,150 +158,168 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Offer typing-free pairing, or manual token entry as a fallback."""
-        return self.async_show_menu(
-            step_id="zeroconf_confirm",
-            menu_options=["pair", "manual"],
-            description_placeholders={"name": self._name or self._host},
-        )
+        """Confirm adding the discovered device, then fetch its token by pairing.
 
-    async def async_step_pair(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Fetch the token from the device without anyone typing it.
-
-        Attempts pairing immediately — a fresh device pairs openly, so choosing
-        this option just works with no further click. An already-paired device
-        refuses, and has to have its old entry removed or be factory-reset
-        before Retry can succeed. Pairing is attempted on every entry (menu pick
-        and Retry alike), so it never gets stuck on an empty confirm form.
+        A fresh device pairs openly, so confirming just works. An already-paired
+        device refuses, and has to be factory-reset before Submit can succeed.
         """
         errors: dict[str, str] = {}
-        assert self._host is not None
-        session = async_get_clientsession(self.hass)
-        try:
-            result = await async_pair(
-                session, self._host, self._port, self._fingerprint
-            )
-        except DashboardAssistantPairingClosedError:
-            errors["base"] = "pairing_closed"
-        except DashboardAssistantError:
-            errors["base"] = "cannot_connect"
-        else:
-            token = result["token"]
-            info, error = await self._validate(self._host, self._port, token)
-            if error:
-                errors["base"] = error
+        if user_input is not None:
+            assert self._host is not None
+            session = async_get_clientsession(self.hass)
+            try:
+                # Pin the certificate the device has now. A card can wait for
+                # days, and a factory reset in between gives the device a new
+                # one; the pin taken at discovery would then fail every Submit.
+                # Confirming is the moment trust is actually given.
+                self._fingerprint = await async_fetch_fingerprint(
+                    self.hass, self._host, self._port
+                )
+                result = await async_pair(
+                    session, self._host, self._port, self._fingerprint
+                )
+            except DashboardAssistantPairingClosedError:
+                errors["base"] = "pairing_closed"
+            except DashboardAssistantCertMismatchError:
+                errors["base"] = "cert_mismatch"
+            except DashboardAssistantError:
+                errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(
-                    info["node_id"], raise_on_progress=False
-                )
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or self._name or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: token,
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
+                token = result["token"]
+                info, error = await self._validate(self._host, self._port, token)
+                if error:
+                    errors["base"] = error
+                else:
+                    await self.async_set_unique_id(
+                        info["node_id"], raise_on_progress=False
+                    )
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=info.get("name") or self._name or "Dashboard Assistant",
+                        data={
+                            CONF_HOST: self._host,
+                            CONF_PORT: self._port,
+                            CONF_TOKEN: token,
+                            CONF_CERT_FINGERPRINT: self._fingerprint,
+                        },
+                    )
 
         return self.async_show_form(
-            step_id="pair",
+            step_id="zeroconf_confirm",
             data_schema=vol.Schema({}),
             description_placeholders={"name": self._name or self._host},
             errors=errors,
         )
 
-    async def async_step_manual(
+
+class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
+    """Pick the dashboard the device shows, and edit its pages.
+
+    Preferences rather than connection data, so they live here and not in the
+    config flow: pairing stays one click, and both can change at any time.
+
+    The two are kept differently. The dashboard is stored in the entry's
+    options; saving reloads the entry, and setup pushes the kiosk login again
+    with the new dashboard's URL (see kiosk_login_is_current). The pages are
+    not stored here at all: the device keeps the one copy of its page list,
+    so the form starts from what the device reports and saving writes the list
+    straight back to it.
+    """
+
+    async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Fallback: type the token shown on the device's Config → Info screen."""
+        entry = self.config_entry
+        if entry.state is not ConfigEntryState.LOADED:
+            # The pages come from the device, so there is nothing to show.
+            return self.async_abort(reason="device_unavailable")
+        coordinator = entry.runtime_data
+
         errors: dict[str, str] = {}
-        assert self._host is not None
         if user_input is not None:
-            info, error = await self._validate(
-                self._host, self._port, user_input[CONF_TOKEN]
-            )
-            if error:
-                errors["base"] = error
+            pages = user_input.get(CONF_PAGES, [])
+            if error := _check_pages(pages):
+                errors[CONF_PAGES] = error
             else:
-                await self.async_set_unique_id(info["node_id"], raise_on_progress=False)
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("name") or self._name or "Dashboard Assistant",
-                    data={
-                        CONF_HOST: self._host,
-                        CONF_PORT: self._port,
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="manual",
-            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
-            description_placeholders={"name": self._name or self._host},
-            errors=errors,
-        )
-
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
-    ) -> ConfigFlowResult:
-        """Handle re-authentication when the token or the certificate changed."""
-        self._host = entry_data[CONF_HOST]
-        self._port = entry_data[CONF_PORT]
-        self._fingerprint = entry_data.get(CONF_CERT_FINGERPRINT)
-        return await self.async_step_reauth_confirm()
-
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Collect a new token for an existing entry, and re-pin if needed.
-
-        This is also the re-pin path. A factory reset regenerates the device's
-        token *and* its certificate, so an entry recovering from one would
-        otherwise fail on the stale pin before the user could enter anything —
-        and a pin mismatch is indistinguishable from an attack by design, which
-        is why resolving it takes a deliberate, user-initiated step rather than
-        happening quietly on rediscovery.
-        """
-        errors: dict[str, str] = {}
-        reauth_entry = self._get_reauth_entry()
-        if user_input is not None:
-            # Re-read the certificate the device is presenting now. On an
-            # unchanged device this returns the pin already held.
-            if self._fingerprint:
                 try:
-                    self._fingerprint = await async_fetch_fingerprint(
-                        self.hass,
-                        reauth_entry.data[CONF_HOST],
-                        reauth_entry.data[CONF_PORT],
-                    )
+                    await _write_pages(coordinator, pages)
                 except DashboardAssistantError:
-                    pass  # let _validate report the connection failure
+                    errors["base"] = "cannot_connect"
+                else:
+                    return self.async_create_entry(
+                        data={CONF_DASHBOARD: user_input[CONF_DASHBOARD]}
+                    )
 
-            info, error = await self._validate(
-                reauth_entry.data[CONF_HOST],
-                reauth_entry.data[CONF_PORT],
-                user_input[CONF_TOKEN],
+        dashboards = [
+            SelectOptionDict(value=DEFAULT_DASHBOARD, label="Home Assistant default")
+        ]
+        dashboards += [
+            SelectOptionDict(value=url_path, label=title)
+            for url_path, title in sorted(
+                kiosk_dashboards(self.hass).items(), key=lambda item: item[1].lower()
             )
-            if error:
-                errors["base"] = error
-            else:
-                await self.async_set_unique_id(info["node_id"])
-                self._abort_if_unique_id_mismatch(reason="wrong_device")
-                return self.async_update_reload_and_abort(
-                    reauth_entry,
-                    data_updates={
-                        CONF_TOKEN: user_input[CONF_TOKEN],
-                        CONF_CERT_FINGERPRINT: self._fingerprint,
-                    },
-                )
-
+        ]
+        if user_input is not None:
+            current = user_input[CONF_DASHBOARD]
+            pages = user_input.get(CONF_PAGES, [])
+        else:
+            current = entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+            pages = _device_pages(coordinator.data)
         return self.async_show_form(
-            step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_DASHBOARD, default=current): SelectSelector(
+                        SelectSelectorConfig(
+                            options=dashboards, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    ),
+                    vol.Optional(CONF_PAGES, default=pages): ObjectSelector(
+                        ObjectSelectorConfig(
+                            fields={
+                                "name": {"selector": {"text": {}}},
+                                "url": {
+                                    "required": True,
+                                    "selector": {"text": {"type": "url"}},
+                                },
+                            },
+                            multiple=True,
+                            label_field="name",
+                            description_field="url",
+                            translation_key=CONF_PAGES,
+                        )
+                    ),
+                }
+            ),
             errors=errors,
         )
+
+
+def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:
+    """The device's page list, as it reports it."""
+    return [{"name": p["name"], "url": p["url"]} for p in data["page"]["list"]]
+
+
+def _clean(pages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [
+        {"name": str(p.get("name", "")).strip(), "url": str(p.get("url", "")).strip()}
+        for p in pages
+    ]
+
+
+def _check_pages(pages: list[dict[str, Any]]) -> str | None:
+    """The same check the device makes, so a refusal keeps the user in the form."""
+    for page in _clean(pages):
+        url = urlparse(page["url"])
+        if url.scheme not in ("http", "https") or not url.netloc:
+            return "invalid_url"
+    return None
+
+
+async def _write_pages(coordinator: Any, pages: list[dict[str, Any]]) -> None:
+    """Make the device's page list exactly ``pages``, in order."""
+    wanted = _clean(pages)
+    if wanted == _device_pages(coordinator.data):
+        return  # saving only the dashboard should not rewrite the pages
+    snapshot = await coordinator.client.async_set_pages(wanted)
+    coordinator.async_set_updated_data(snapshot)
