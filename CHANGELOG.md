@@ -8,6 +8,26 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.1.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.0.0...v1.1.0-rc.1) (2026-11-09)
+
+
+### Features
+
+* let the device's home be a dashboard tab or any website ([84754bc](https://github.com/ajfriesen/dashboard-assistant-integration/commit/84754bcd9ab04a1eb1c2d7068a83bde1bd617fd2))
+* let the device's home be a dashboard tab or any website ([8086e67](https://github.com/ajfriesen/dashboard-assistant-integration/commit/8086e67d5d3a8e6b768b5b967112c11d63b515aa))
+
+
+### Bug Fixes
+
+* carry the chosen dashboard over to the new Home option ([6da9bd4](https://github.com/ajfriesen/dashboard-assistant-integration/commit/6da9bd4f79ac38aeff95910a2dd5697acd8f5562))
+* give the kiosk user a username so Ingress add-ons can sign it in ([0468bb3](https://github.com/ajfriesen/dashboard-assistant-integration/commit/0468bb3e09a63e5ed87b3c5265283327f974abfc))
+* give the kiosk user a username so Ingress add-ons can sign it in ([047b4fa](https://github.com/ajfriesen/dashboard-assistant-integration/commit/047b4fa0ebe34e0cfb90c5e95a78537deb1b0373))
+
+
+### Miscellaneous Chores
+
+* cut 1.1.0-rc.1 ([1791a0d](https://github.com/ajfriesen/dashboard-assistant-integration/commit/1791a0d0ccd7ce4b7acc26dab7556756921667be))
+
 ## [1.0.0](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v0.3.0-rc.5...v1.0.0) (2026-11-06)
 
 
