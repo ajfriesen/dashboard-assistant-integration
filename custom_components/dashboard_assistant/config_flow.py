@@ -53,6 +53,8 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Dashboard Assistant."""
 
     VERSION = 1
+    # 1.2: the "dashboard" option became "home" (see async_migrate_entry).
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
