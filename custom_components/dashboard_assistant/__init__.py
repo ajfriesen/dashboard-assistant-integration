@@ -21,7 +21,7 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_CERT_FINGERPRINT, LOGGER
+from .const import CONF_CERT_FINGERPRINT, CONF_HOME, LOGGER
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
@@ -44,6 +44,26 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.UPDATE,
 ]
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
+) -> bool:
+    """Bring an entry made by an earlier version up to date.
+
+    1.1 → 1.2: the chosen dashboard, kept as the "dashboard" option, is now the
+    device's home (CONF_HOME), which can also be a tab or any website. Its
+    values mean the same thing, so it carries over as it is.
+    """
+    if entry.version > 1:
+        return False  # made by a newer version; refuse rather than guess
+    if entry.minor_version < 2:
+        options = dict(entry.options)
+        if "dashboard" in options:
+            options[CONF_HOME] = options.pop("dashboard")
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+        LOGGER.debug("Migrated entry %s to 1.2", entry.entry_id)
+    return True
 
 
 async def async_setup_entry(
@@ -89,9 +109,9 @@ async def async_setup_entry(
     # one-shot at setup or a manual button couldn't recover a failed attempt.
     # Instead we re-attempt on each healthy coordinator refresh until the login has
     # actually landed on the device (CONF_KIOSK_PROVISIONED). The same path
-    # re-pushes it when the URL it carried (CONF_KIOSK_URL) is out of date: the
-    # dashboard option changed (the options flow reloads the entry, and setup
-    # finds it stale), or Home Assistant's own URL changed in its network
+    # re-pushes it when the URLs it carried (CONF_KIOSK_URL, CONF_KIOSK_HOME_URL)
+    # are out of date: the home option changed (the options flow reloads the
+    # entry, and setup finds it stale), or Home Assistant's own URL changed in its network
     # settings, which reloads nothing, so that one is caught from the event.
     # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
     # and the lock keeps overlapping refreshes from provisioning twice.
