@@ -14,6 +14,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
+from homeassistant.components.frontend import DATA_PANELS
 from homeassistant.components.lovelace.const import LOVELACE_DATA, ConfigNotFound
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import HomeAssistant
@@ -24,6 +26,7 @@ from custom_components.dashboard_assistant.const import (
     CONF_CERT_FINGERPRINT,
     CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_URL,
+    CONF_KIOSK_USER_ID,
     CONF_PAGES,
     DOMAIN,
 )
@@ -85,6 +88,34 @@ async def dashboards(hass: HomeAssistant) -> None:
     await hass.config.async_update(internal_url=HA_URL)
 
 
+def _panel(url_path: str, title: str, config: dict[str, Any] | None, *, require_admin: bool = False) -> Any:
+    """A sidebar panel as the frontend keeps it."""
+    return SimpleNamespace(
+        frontend_url_path=url_path,
+        sidebar_title=title,
+        config=config,
+        require_admin=require_admin,
+    )
+
+
+@pytest.fixture
+def apps(hass: HomeAssistant) -> None:
+    """Sidebar panels: two apps a non-admin may open (registered the current
+    and the older way), an admin-only app, and a panel that is no app."""
+    hass.data.setdefault(DATA_PANELS, {}).update(
+        {
+            "d5369777_music_assistant": _panel(
+                "d5369777_music_assistant", "Music Assistant", {"addon": "d5369777_music_assistant"}
+            ),
+            "a0d7b954_vscode": _panel(
+                "a0d7b954_vscode", "Studio Code Server", {"addon": "a0d7b954_vscode"}, require_admin=True
+            ),
+            "ccab4aaf_frigate": _panel("ccab4aaf_frigate", "Frigate", {"ingress": "ccab4aaf_frigate"}),
+            "energy": _panel("energy", "Energy", None),
+        }
+    )
+
+
 def _with_pages(state: dict[str, Any], pages: list[dict[str, str]]) -> dict[str, Any]:
     return {**state, "page": {**state["page"], "list": pages}}
 
@@ -111,8 +142,14 @@ async def _setup(
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     kiosk_url: str | None = HA_URL,
+    kiosk_group: str = GROUP_ID_USER,
 ) -> MockConfigEntry:
-    """Set up an entry whose device already holds a login for ``kiosk_url``."""
+    """Set up an entry whose device already holds a login for ``kiosk_url``,
+    as a user in ``kiosk_group``."""
+    # The first user Home Assistant creates is its owner, and so an admin; a
+    # real one always has its owner already.
+    await hass.auth.async_create_user("Owner")
+    user = await hass.auth.async_create_user("Dashboard Assistant", group_ids=[kiosk_group])
     mock_daemon(aioclient_mock, device_info, device_state)
     aioclient_mock.post(
         f"{BASE}/kiosk_login",
@@ -133,6 +170,7 @@ async def _setup(
             CONF_CERT_FINGERPRINT: FINGERPRINT,
             CONF_KIOSK_PROVISIONED: True,
             CONF_KIOSK_URL: kiosk_url,
+            CONF_KIOSK_USER_ID: user.id,
         },
     )
     entry.add_to_hass(hass)
@@ -192,6 +230,62 @@ async def test_a_page_is_picked_from_the_dashboards_and_tabs_the_kiosk_can_open(
         ("dashboard-kitchen/1", "Kitchen › Climate"),
     ]
     assert fields["url"]["selector"]["text"]["type"] == "url"
+
+
+async def test_apps_the_kiosk_can_open_are_listed_after_the_dashboards(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+    apps: None,
+) -> None:
+    """An app's sidebar panel, such as Music Assistant's, is a Home Assistant
+    page too; an admin-only one is left out, like an admin-only dashboard."""
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    options = result["data_schema"].schema[CONF_PAGES].config["fields"]["ha_page"][
+        "selector"
+    ]["select"]["options"]
+    assert [(o["value"], o["label"]) for o in options][-2:] == [
+        ("ccab4aaf_frigate", "Frigate"),
+        ("d5369777_music_assistant", "Music Assistant"),
+    ]
+    assert "a0d7b954_vscode" not in [o["value"] for o in options]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PAGES: [{"ha_page": "d5369777_music_assistant"}]}
+    )
+    await hass.async_block_till_done()
+    assert _page_writes(aioclient_mock) == [
+        [{"name": "Music Assistant", "url": f"{HA_URL}/d5369777_music_assistant"}]
+    ]
+
+
+async def test_an_admin_kiosk_user_is_offered_admin_only_dashboards_and_apps(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+    apps: None,
+) -> None:
+    """The owner may make the device's user an admin; it can then open them."""
+    entry = await _setup(
+        hass, aioclient_mock, device_info, device_state, kiosk_group=GROUP_ID_ADMIN
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    values = [
+        o["value"]
+        for o in result["data_schema"].schema[CONF_PAGES].config["fields"]["ha_page"][
+            "selector"
+        ]["select"]["options"]
+    ]
+    assert {"dashboard-admin", "dashboard-admin/x", "a0d7b954_vscode"} <= set(values)
+    assert "energy" not in values
 
 
 async def test_the_form_shows_home_assistant_pages_as_their_dropdown_entry(
