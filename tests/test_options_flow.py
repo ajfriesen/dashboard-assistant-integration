@@ -1,11 +1,9 @@
-"""The options flow: the device's home, and its pages.
+"""The options flow: the device's pages, the first of which is its home.
 
-The home is where the device starts and where its Home button goes: Home
-Assistant's default dashboard, another dashboard, one of a dashboard's tabs, or
-any website. It is a preference, not connection data, so it lives in the options
-flow (Configure on the integration card) rather than in the config flow. Saving
-it reloads the entry, which pushes the new URL to the device with the kiosk
-login.
+Each page is a Home Assistant page, picked from its dashboards and their tabs,
+or any website. The device starts on the first page and its Home button goes
+back to it. The device keeps the one copy of the list, so the form starts from
+what it reports and saving writes the list straight back to it.
 """
 
 from __future__ import annotations
@@ -23,15 +21,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dashboard_assistant.const import (
     CONF_CERT_FINGERPRINT,
-    CONF_HOME,
-    CONF_KIOSK_HOME_URL,
     CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_URL,
     CONF_PAGES,
-    DEFAULT_HOME,
     DOMAIN,
 )
-from custom_components.dashboard_assistant.provision import home_url
 
 from .conftest import BASE, FINGERPRINT, HOST, PORT, TOKEN, mock_daemon
 
@@ -63,14 +57,18 @@ def _dashboard(
 
 @pytest.fixture
 async def dashboards(hass: HomeAssistant) -> None:
-    """Home Assistant's dashboard registry: the default one plus two more.
+    """Home Assistant's dashboard registry: the default one plus three more.
 
     The default one is the built-in Overview with two tabs; Kitchen has two
     tabs, one without a path, which Home Assistant then addresses by position.
     """
     hass.data[LOVELACE_DATA] = SimpleNamespace(
         dashboards={
-            None: _dashboard(None, "Overview", views=[{"title": "Home", "path": "home"}, {"title": "Energy", "path": "energy"}]),
+            None: _dashboard(
+                None,
+                "Overview",
+                views=[{"title": "Home", "path": "home"}, {"title": "Energy", "path": "energy"}],
+            ),
             "dashboard-kitchen": _dashboard(
                 "dashboard-kitchen",
                 "Kitchen",
@@ -85,6 +83,10 @@ async def dashboards(hass: HomeAssistant) -> None:
     await hass.config.async_update(internal_url=HA_URL)
 
 
+def _with_pages(state: dict[str, Any], pages: list[dict[str, str]]) -> dict[str, Any]:
+    return {**state, "page": {**state["page"], "list": pages}}
+
+
 def _kiosk_logins(aioclient_mock: Any) -> list[dict[str, Any]]:
     return [
         json.loads(data) if isinstance(data, (str, bytes)) else dict(data)
@@ -93,9 +95,12 @@ def _kiosk_logins(aioclient_mock: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _pushed_urls(aioclient_mock: Any) -> list[tuple[str, str]]:
-    """(ha_url, home_url) of each kiosk login sent to the device."""
-    return [(login["ha_url"], login["home_url"]) for login in _kiosk_logins(aioclient_mock)]
+def _page_writes(aioclient_mock: Any) -> list[list[dict[str, str]]]:
+    return [
+        (json.loads(data) if isinstance(data, (str, bytes)) else dict(data))["pages"]
+        for method, url, data, _ in aioclient_mock.mock_calls
+        if method == "POST" and str(url).endswith("/pages")
+    ]
 
 
 async def _setup(
@@ -103,23 +108,29 @@ async def _setup(
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
-    **data: Any,
+    kiosk_url: str | None = HA_URL,
 ) -> MockConfigEntry:
+    """Set up an entry whose device already holds a login for ``kiosk_url``."""
     mock_daemon(aioclient_mock, device_info, device_state)
     aioclient_mock.post(
         f"{BASE}/kiosk_login",
         json={"applied": ["token"]},
         headers={"Content-Type": "application/json"},
     )
+    aioclient_mock.post(
+        f"{BASE}/pages", json=device_state, headers={"Content-Type": "application/json"}
+    )
     entry = MockConfigEntry(
         domain=DOMAIN,
+        minor_version=3,
         unique_id=device_info["node_id"],
         data={
             CONF_HOST: HOST,
             CONF_PORT: PORT,
             CONF_TOKEN: TOKEN,
             CONF_CERT_FINGERPRINT: FINGERPRINT,
-            **data,
+            CONF_KIOSK_PROVISIONED: True,
+            CONF_KIOSK_URL: kiosk_url,
         },
     )
     entry.add_to_hass(hass)
@@ -128,30 +139,49 @@ async def _setup(
     return entry
 
 
-async def test_options_offer_the_dashboards_and_tabs_the_kiosk_can_open(
+def _pages_field(result: dict[str, Any]) -> Any:
+    return next(k for k in result["data_schema"].schema if k == CONF_PAGES)
+
+
+async def test_the_form_has_only_pages(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     dashboards: None,
 ) -> None:
-    """Home Assistant's default, then every dashboard a non-admin user can open,
-    each followed by its tabs; and any other address can be typed in.
+    """The first page is the home, so there is no separate field for it."""
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert list(result["data_schema"].schema) == [CONF_PAGES]
+
+
+async def test_a_page_is_picked_from_the_dashboards_and_tabs_the_kiosk_can_open(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+) -> None:
+    """Home Assistant's default, the Overview's tabs, then every dashboard a
+    non-admin user can open, each followed by its tabs; or a website.
 
     The kiosk signs in as a non-admin user, so an admin-only dashboard would
     only ever show it an error. A dashboard without saved tabs (one Home
     Assistant generates) is offered whole.
     """
-    entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
-    )
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
-    assert result["type"] is FlowResultType.FORM
-    selector = result["data_schema"].schema[CONF_HOME].config
-    assert [(o["value"], o["label"]) for o in selector["options"]] == [
-        (DEFAULT_HOME, "Home Assistant default"),
+    fields = result["data_schema"].schema[CONF_PAGES].config["fields"]
+    assert list(fields) == ["name", "ha_page", "url"]
+    options = fields["ha_page"]["selector"]["select"]["options"]
+    assert [(o["value"], o["label"]) for o in options] == [
+        ("default", "Home Assistant default"),
         ("lovelace/home", "Overview › Home"),
         ("lovelace/energy", "Overview › Energy"),
         ("dashboard-auto", "Auto"),
@@ -159,105 +189,154 @@ async def test_options_offer_the_dashboards_and_tabs_the_kiosk_can_open(
         ("dashboard-kitchen/lights", "Kitchen › Lights"),
         ("dashboard-kitchen/1", "Kitchen › Climate"),
     ]
-    assert selector["custom_value"] is True
+    assert fields["url"]["selector"]["text"]["type"] == "url"
 
 
-async def test_choosing_a_dashboard_makes_it_the_devices_home(
+async def test_the_form_shows_home_assistant_pages_as_their_dropdown_entry(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     dashboards: None,
 ) -> None:
-    entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
+    """The device keeps URLs; the form turns those it recognises back into
+    the entries they were picked from, and shows the rest as websites."""
+    state = _with_pages(
+        device_state,
+        [
+            {"name": "Lights", "url": f"{HA_URL}/dashboard-kitchen/lights"},
+            {"name": "Weather", "url": "https://www.windy.com"},
+            {"name": "Home Assistant", "url": f"{HA_URL}/"},
+            {"name": "Energy panel", "url": f"{HA_URL}/energy"},
+        ],
     )
-    assert _kiosk_logins(aioclient_mock) == []
+    entry = await _setup(hass, aioclient_mock, device_info, state)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert _pages_field(result).default() == [
+        {"name": "Lights", "ha_page": "dashboard-kitchen/lights"},
+        {"name": "Weather", "url": "https://www.windy.com"},
+        {"name": "Home Assistant", "ha_page": "default"},
+        {"name": "Energy panel", "url": f"{HA_URL}/energy"},
+    ]
+
+
+async def test_saving_sends_the_pages_as_urls_in_order(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+) -> None:
+    """A Home Assistant page becomes its URL, named after it unless named."""
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_HOME: "dashboard-kitchen"}
+        result["flow_id"],
+        {
+            CONF_PAGES: [
+                {"ha_page": "dashboard-kitchen/lights"},
+                {"name": "Weather | Windy", "url": " https://www.windy.com "},
+                {"name": "Overview", "ha_page": "default"},
+                {"url": "http://nvr.lan/live"},
+            ],
+        },
     )
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options[CONF_HOME] == "dashboard-kitchen"
-    assert _pushed_urls(aioclient_mock) == [(HA_URL, f"{HA_URL}/dashboard-kitchen")]
+    assert _page_writes(aioclient_mock) == [
+        [
+            {"name": "Kitchen › Lights", "url": f"{HA_URL}/dashboard-kitchen/lights"},
+            {"name": "Weather | Windy", "url": "https://www.windy.com"},
+            {"name": "Overview", "url": HA_URL},
+            {"name": "", "url": "http://nvr.lan/live"},
+        ]
+    ]
+    # The device keeps the one copy of the list; a second one in the entry
+    # could only drift from it.
+    assert entry.options == {}
+
+
+async def test_saving_unchanged_pages_writes_nothing(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+) -> None:
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PAGES: _pages_field(result).default()}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert _page_writes(aioclient_mock) == []
 
 
 @pytest.mark.parametrize(
-    ("home", "url"),
+    ("page", "error"),
     [
-        ("dashboard-kitchen/lights", f"{HA_URL}/dashboard-kitchen/lights"),
-        ("lovelace/energy", f"{HA_URL}/lovelace/energy"),
-        # Typed in: a path on Home Assistant, a page on it, or any website.
-        ("/dashboard-kitchen/1", f"{HA_URL}/dashboard-kitchen/1"),
-        (f"{HA_URL}/dashboard-kitchen/lights", f"{HA_URL}/dashboard-kitchen/lights"),
-        ("https://www.windy.com/?rain", "https://www.windy.com/?rain"),
+        ({"name": "Bad", "url": "ftp://files.lan"}, "invalid_url"),
+        ({"name": "Bad", "url": "homeassistant.local:8123"}, "invalid_url"),
+        ({"name": "Bad", "url": "https://"}, "invalid_url"),
+        ({"name": "Neither"}, "page_needs_one"),
+        ({"name": "Both", "ha_page": "default", "url": "https://www.windy.com"}, "page_needs_one"),
     ],
 )
-async def test_a_tab_or_any_website_can_be_the_home(
+async def test_a_page_that_is_not_one_page_is_refused_in_the_form(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     dashboards: None,
-    home: str,
-    url: str,
+    page: dict[str, str],
+    error: str,
 ) -> None:
-    """Sign-in still goes to Home Assistant's own URL, whatever the home is.
-
-    The device signs in only on the ha_url origin, so a home on another site
-    is shown signed out and never handed the token.
-    """
-    entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
-    )
+    """The device would refuse a bad address too; saying so here keeps the
+    user in the form."""
+    entry = await _setup(hass, aioclient_mock, device_info, device_state)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_HOME: home}
-    )
-    await hass.async_block_till_done()
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert _pushed_urls(aioclient_mock) == [(HA_URL, url)]
-
-
-@pytest.mark.parametrize("home", ["ftp://files.lan", "https://", "  "])
-async def test_a_home_that_is_not_a_website_is_refused_in_the_form(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    device_state: dict[str, Any],
-    dashboards: None,
-    home: str,
-) -> None:
-    entry = await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
-    )
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_HOME: home}
+        result["flow_id"], {CONF_PAGES: [page]}
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_HOME: "invalid_home"}
-    assert _kiosk_logins(aioclient_mock) == []
+    assert result["errors"] == {CONF_PAGES: error}
+    assert _page_writes(aioclient_mock) == []
 
 
-async def test_an_unchanged_entry_is_not_pushed_again(
+async def test_the_login_carries_home_assistants_own_url(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     dashboards: None,
 ) -> None:
-    """A login for the URL Home Assistant would send now is not sent again."""
-    await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
+    """Whatever the pages are: the device signs in there and nowhere else."""
+    state = _with_pages(
+        device_state, [{"name": "Lights", "url": f"{HA_URL}/dashboard-kitchen/lights"}]
     )
+    await _setup(hass, aioclient_mock, device_info, state, kiosk_url=None)
+
+    assert [login.get("ha_url") for login in _kiosk_logins(aioclient_mock)] == [HA_URL]
+    assert "home_url" not in _kiosk_logins(aioclient_mock)[0]
+
+
+async def test_an_unchanged_login_is_not_pushed_again(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+    dashboards: None,
+) -> None:
+    await _setup(hass, aioclient_mock, device_info, device_state)
     assert _kiosk_logins(aioclient_mock) == []
 
 
@@ -271,150 +350,44 @@ async def test_a_new_home_assistant_url_is_pushed_to_the_device(
     """Changing Home Assistant's URL in its own settings re-points the device.
 
     Nothing in the integration's options changes, so no reload happens; without
-    this the device keeps opening the old URL until Home Assistant restarts.
+    this the device keeps signing in on the old URL until Home Assistant restarts.
     """
-    await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
-    )
+    await _setup(hass, aioclient_mock, device_info, device_state)
     assert _kiosk_logins(aioclient_mock) == []
 
     await hass.config.async_update(internal_url="http://ha-new.example:8123")
     await hass.async_block_till_done()
 
-    assert _pushed_urls(aioclient_mock) == [
-        ("http://ha-new.example:8123", "http://ha-new.example:8123")
+    assert [login["ha_url"] for login in _kiosk_logins(aioclient_mock)] == [
+        "http://ha-new.example:8123"
     ]
-
-
-async def test_the_default_home_is_home_assistants_own_url(
-    hass: HomeAssistant, dashboards: None
-) -> None:
-    assert home_url(hass, HA_URL, DEFAULT_HOME) == HA_URL
-
-
-async def test_a_deleted_dashboard_falls_back_to_the_default(
-    hass: HomeAssistant, dashboards: None
-) -> None:
-    """A dead link would leave the device on an error page; so would a tab of it."""
-    assert home_url(hass, HA_URL, "dashboard-gone") == HA_URL
-    assert home_url(hass, HA_URL, "dashboard-gone/lights") == HA_URL
-    assert home_url(hass, HA_URL, "dashboard-kitchen") == f"{HA_URL}/dashboard-kitchen"
-
-
-def _page_writes(aioclient_mock: Any) -> list[list[dict[str, str]]]:
-    return [
-        (json.loads(data) if isinstance(data, (str, bytes)) else dict(data))["pages"]
-        for method, url, data, _ in aioclient_mock.mock_calls
-        if method == "POST" and str(url).endswith("/pages")
-    ]
-
-
-async def _setup_with_pages(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    device_state: dict[str, Any],
-) -> MockConfigEntry:
-    aioclient_mock.post(
-        f"{BASE}/pages",
-        json=device_state,
-        headers={"Content-Type": "application/json"},
-    )
-    return await _setup(
-        hass, aioclient_mock, device_info, device_state, **{CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: HA_URL, CONF_KIOSK_HOME_URL: HA_URL}
-    )
-
-
-async def test_options_show_the_pages_the_device_has(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    device_state: dict[str, Any],
-    dashboards: None,
-) -> None:
-    """The device owns its page list, so the form starts from what it reports."""
-    entry = await _setup_with_pages(hass, aioclient_mock, device_info, device_state)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-
-    marker = next(k for k in result["data_schema"].schema if k == CONF_PAGES)
-    assert marker.default() == device_state["page"]["list"]
-
-
-async def test_saving_pages_sends_the_whole_list_to_the_device(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    device_state: dict[str, Any],
-    dashboards: None,
-) -> None:
-    """Any website, in order, in one call: the device replaces its list."""
-    entry = await _setup_with_pages(hass, aioclient_mock, device_info, device_state)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            CONF_HOME: DEFAULT_HOME,
-            CONF_PAGES: [
-                {"name": "Weather | Windy", "url": " https://www.windy.com "},
-                {"url": "http://nvr.lan/live"},
-            ],
-        },
-    )
-    await hass.async_block_till_done()
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert _page_writes(aioclient_mock) == [
-        [
-            {"name": "Weather | Windy", "url": "https://www.windy.com"},
-            {"name": "", "url": "http://nvr.lan/live"},
-        ]
-    ]
-    # The device keeps the one copy of the list; a second one in the entry
-    # could only drift from it.
-    assert entry.options == {CONF_HOME: DEFAULT_HOME}
-
-
-async def test_saving_only_the_home_leaves_the_pages_alone(
-    hass: HomeAssistant,
-    aioclient_mock: Any,
-    device_info: dict[str, Any],
-    device_state: dict[str, Any],
-    dashboards: None,
-) -> None:
-    entry = await _setup_with_pages(hass, aioclient_mock, device_info, device_state)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_HOME: "dashboard-kitchen"}
-    )
-    await hass.async_block_till_done()
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert _page_writes(aioclient_mock) == []
 
 
 @pytest.mark.parametrize(
-    "url", ["ftp://files.lan", "homeassistant.local:8123", "https://"]
+    ("first", "pushed"),
+    [
+        # An older device starts at, and goes Home to, the login's URL, so it
+        # gets the first page when that is a Home Assistant page...
+        (f"{HA_URL}/dashboard-kitchen/lights", f"{HA_URL}/dashboard-kitchen/lights"),
+        # ...and Home Assistant's own URL otherwise: it must never sign in
+        # anywhere else.
+        ("https://www.windy.com", HA_URL),
+    ],
 )
-async def test_a_page_that_is_not_a_website_is_refused_in_the_form(
+async def test_an_older_device_gets_its_first_page_as_the_login_url(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
     dashboards: None,
-    url: str,
+    first: str,
+    pushed: str,
 ) -> None:
-    """The device would refuse it too; saying so here keeps the user in the form."""
-    entry = await _setup_with_pages(hass, aioclient_mock, device_info, device_state)
+    """Until its OS is updated, a device without home_is_first_page keeps
+    starting on the page the user put first."""
+    info = {k: v for k, v in device_info.items() if k != "home_is_first_page"}
+    state = _with_pages(device_state, [{"name": "First", "url": first}])
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {CONF_HOME: DEFAULT_HOME, CONF_PAGES: [{"name": "Bad", "url": url}]},
-    )
+    await _setup(hass, aioclient_mock, info, state, kiosk_url=None)
 
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_PAGES: "invalid_url"}
-    assert _page_writes(aioclient_mock) == []
+    assert [login["ha_url"] for login in _kiosk_logins(aioclient_mock)] == [pushed]

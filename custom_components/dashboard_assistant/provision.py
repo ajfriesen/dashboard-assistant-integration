@@ -2,8 +2,8 @@
 
 The whole point: nobody should have to type Home Assistant credentials on the
 kiosk. This module creates a dedicated, non-admin Home Assistant user, mints a
-long-lived access token for it, and hands that token (plus Home Assistant's URL
-and the device's home) to the device over the authenticated LAN API. The device stages it and relaunches
+long-lived access token for it, and hands that token (plus Home Assistant's URL)
+to the device over the authenticated LAN API. The device stages it and relaunches
 the kiosk, whose autologin injector signs the browser in.
 
 It is idempotent: the created user and refresh-token ids are recorded on the
@@ -17,6 +17,7 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from homeassistant.auth.const import GROUP_ID_USER
 from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN, User
@@ -29,13 +30,12 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import DashboardAssistantClient
 from .const import (
-    CONF_HOME,
-    CONF_KIOSK_HOME_URL,
     CONF_KIOSK_PROVISIONED,
     CONF_KIOSK_REFRESH_TOKEN_ID,
     CONF_KIOSK_URL,
     CONF_KIOSK_USER_ID,
-    DEFAULT_HOME,
+    CONF_LEGACY_HOME,
+    HA_DEFAULT_PAGE,
     KIOSK_USER_NAME,
     LOGGER,
 )
@@ -126,27 +126,17 @@ async def async_provision_kiosk_login(
 
     access_token = hass.auth.async_create_access_token(refresh_token)
 
-    home = entry.options.get(CONF_HOME, DEFAULT_HOME)
-    if _missing_dashboard(hass, home):
-        LOGGER.warning(
-            "Dashboard %s no longer exists; the device shows the default one", home
-        )
-    ha_url, kiosk_home = wanted_kiosk_urls(hass, entry) or (None, None)
+    ha_url = wanted_kiosk_url(hass, entry)
 
     # If this raises, the user/token are already recorded above, so the retry
     # re-pushes without duplicating; the provisioned flag is set only once the
     # push has actually landed, and is what stops the self-healing retry loop.
-    await client.async_kiosk_login(access_token, ha_url, kiosk_home)
+    await client.async_kiosk_login(access_token, ha_url)
 
     if not kiosk_login_is_current(hass, entry):
         hass.config_entries.async_update_entry(
             entry,
-            data={
-                **entry.data,
-                CONF_KIOSK_PROVISIONED: True,
-                CONF_KIOSK_URL: ha_url,
-                CONF_KIOSK_HOME_URL: kiosk_home,
-            },
+            data={**entry.data, CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: ha_url},
         )
     LOGGER.info("Provisioned kiosk login for user %s", user.id)
 
@@ -225,43 +215,64 @@ async def async_deprovision_kiosk_login(
             LOGGER.info("Removed kiosk user %s", user_id)
 
 
-def wanted_kiosk_urls(
-    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
-) -> tuple[str, str] | None:
-    """(Home Assistant's URL, the device's home) to send now, or None if Home
-    Assistant has no URL.
+def ha_base_url(hass: HomeAssistant) -> str | None:
+    """Home Assistant's URL for the device, or None if it has none.
 
     Prefers the internal (LAN) URL, since the kiosk is on the LAN, and falls
-    back to whatever Home Assistant can resolve. With none configured the login
-    still goes out, and the device keeps the URLs it has.
+    back to whatever Home Assistant can resolve.
     """
     try:
-        base = get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
+        return get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
     except NoURLAvailableError:
         return None
-    return base, home_url(hass, base, entry.options.get(CONF_HOME, DEFAULT_HOME))
+
+
+def wanted_kiosk_url(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
+) -> str | None:
+    """The URL the login should carry now, or None if Home Assistant has none.
+
+    Home Assistant's own URL: the device signs in only on its origin, and starts
+    on its first page. A device older than that (no home_is_first_page) starts
+    at, and goes Home to, this URL instead, so it gets the first page when that
+    is a Home Assistant page; never another site, which would then be handed the
+    token. With no URL the login still goes out, and the device keeps its URL.
+    """
+    base = ha_base_url(hass)
+    coordinator = getattr(entry, "runtime_data", None)
+    if base is None or coordinator is None or coordinator.info.get("home_is_first_page"):
+        return base
+    pages = (coordinator.data or {}).get("page", {}).get("list") or []
+    if pages and same_origin(pages[0]["url"], base):
+        return pages[0]["url"]
+    return base
 
 
 def kiosk_login_is_current(
     hass: HomeAssistant, entry: DashboardAssistantConfigEntry
 ) -> bool:
-    """Whether the device holds a login for the URLs Home Assistant would send.
+    """Whether the device holds a login for the URL Home Assistant would send.
 
-    They change with the home option and with Home Assistant's own network
-    settings; either one makes the login stale.
+    That URL changes with Home Assistant's own network settings (and, for an
+    older device, with its first page); either makes the login stale.
     """
-    pushed = (entry.data.get(CONF_KIOSK_URL), entry.data.get(CONF_KIOSK_HOME_URL))
-    return bool(entry.data.get(CONF_KIOSK_PROVISIONED)) and pushed == (
-        wanted_kiosk_urls(hass, entry) or (None, None)
-    )
+    return bool(entry.data.get(CONF_KIOSK_PROVISIONED)) and entry.data.get(
+        CONF_KIOSK_URL
+    ) == wanted_kiosk_url(hass, entry)
+
+
+def same_origin(url: str, base: str) -> bool:
+    """Whether ``url`` is on the same scheme, host and port as ``base``."""
+    a, b = urlparse(url), urlparse(base)
+    return (a.scheme, a.netloc) == (b.scheme, b.netloc)
 
 
 def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
     """The dashboards the kiosk can open, as {url_path: title}.
 
-    Leaves out Home Assistant's default dashboard, which the options offer
-    separately as its bare URL, and admin-only ones: the kiosk signs in as a
-    non-admin user, so it could only ever show an error for those.
+    Leaves out Home Assistant's default dashboard, which is offered separately
+    as its bare URL, and admin-only ones: the kiosk signs in as a non-admin
+    user, so it could only ever show an error for those.
     """
     data = hass.data.get(LOVELACE_DATA)
     if data is None:
@@ -277,29 +288,29 @@ def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
     return found
 
 
-async def async_kiosk_homes(hass: HomeAssistant) -> list[tuple[str, str]]:
-    """The homes the options offer, as (value, label): Home Assistant's
-    default, the built-in Overview's tabs, then each dashboard the kiosk can
-    open followed by its tabs.
+async def async_ha_pages(hass: HomeAssistant) -> list[tuple[str, str]]:
+    """The Home Assistant pages a page can be, as (value, label): Home
+    Assistant's default, the built-in Overview's tabs, then each dashboard the
+    kiosk can open followed by its tabs.
     """
-    homes = [(DEFAULT_HOME, "Home Assistant default")]
+    pages = [(HA_DEFAULT_PAGE, "Home Assistant default")]
     data = hass.data.get(LOVELACE_DATA)
     if data is None:
-        return homes
+        return pages
     if (overview := data.dashboards.get(None)) is not None:
-        homes += [
+        pages += [
             (f"{LOVELACE_DOMAIN}/{path}", f"Overview › {title}")
             for path, title in await _tabs(overview)
         ]
     for url_path, name in sorted(
         kiosk_dashboards(hass).items(), key=lambda item: item[1].lower()
     ):
-        homes.append((url_path, name))
-        homes += [
+        pages.append((url_path, name))
+        pages += [
             (f"{url_path}/{path}", f"{name} › {title}")
             for path, title in await _tabs(data.dashboards[url_path])
         ]
-    return homes
+    return pages
 
 
 async def _tabs(dashboard: Any) -> list[tuple[str, str]]:
@@ -323,33 +334,63 @@ async def _tabs(dashboard: Any) -> list[tuple[str, str]]:
     return tabs
 
 
-def is_website(home: str) -> bool:
-    """Whether a home is a full web address rather than a path on Home Assistant."""
-    return "://" in home
-
-
-def _missing_dashboard(hass: HomeAssistant, home: str) -> bool:
-    """Whether a home is a path on a dashboard the kiosk cannot open (any more).
-
-    Only a hyphenated first segment names a dashboard (Home Assistant requires a
-    hyphen in the url_path of one a user creates). Anything else, such as
-    ``lovelace/energy`` or a panel like ``energy``, is passed through as typed.
-    """
-    if home == DEFAULT_HOME or is_website(home):
-        return False
-    first = home.strip("/").split("/", 1)[0]
-    return "-" in first and first not in kiosk_dashboards(hass)
-
-
-def home_url(hass: HomeAssistant, base: str, home: str) -> str:
-    """The device's home as a URL: a website as it is, a path on Home Assistant.
-
-    A dashboard deleted since it was chosen falls back to the default one, so
-    the device does not sit on an error page. This runs on every refresh, so it
-    does not log; the push does.
-    """
-    if is_website(home):
-        return home
-    if home == DEFAULT_HOME or _missing_dashboard(hass, home):
+def ha_page_url(base: str, value: str) -> str:
+    """The URL of a Home Assistant page (an async_ha_pages value)."""
+    if value == HA_DEFAULT_PAGE:
         return base
-    return f"{base.rstrip('/')}/{home.strip('/')}"
+    return f"{base.rstrip('/')}/{value.strip('/')}"
+
+
+def ha_page_value(base: str, url: str, values: list[str]) -> str | None:
+    """The Home Assistant page a URL is, among ``values``; None if none is."""
+    root = base.rstrip("/")
+    if url.rstrip("/") == root:
+        return HA_DEFAULT_PAGE
+    if url.startswith(root + "/") and (path := url[len(root) + 1 :].strip("/")) in values:
+        return path
+    return None
+
+
+# The first page a device has before Home Assistant sends it a list, on an OS
+# older than one that uses Home Assistant's own URL for it (defaultPages).
+_STOCK_FIRST_PAGE = "http://homeassistant.local:8123"
+
+
+async def async_apply_legacy_home(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry, coordinator: Any
+) -> None:
+    """Put the home an entry made before 1.3 kept first in the device's pages.
+
+    That home was where the device started and where Home went; the first page
+    is now. It replaces the stock first page, goes in front of any other, and
+    changes nothing if it is first already. Kept on the entry until the device
+    has the list, so a refusal is retried on the next setup.
+    """
+    legacy = entry.data.get(CONF_LEGACY_HOME)
+    if legacy is None or (base := ha_base_url(hass)) is None:
+        return
+    url, name = await _legacy_home_page(hass, base, legacy)
+    pages = [{"name": p["name"], "url": p["url"]} for p in coordinator.data["page"]["list"]]
+    first = pages[0]["url"].rstrip("/") if pages else None
+    if first != url.rstrip("/"):
+        if first == _STOCK_FIRST_PAGE:
+            pages = pages[1:]
+        snapshot = await coordinator.client.async_set_pages([{"name": name, "url": url}, *pages])
+        coordinator.async_set_updated_data(snapshot)
+    hass.config_entries.async_update_entry(
+        entry, data={k: v for k, v in entry.data.items() if k != CONF_LEGACY_HOME}
+    )
+    LOGGER.info("Made the device's old home, %s, its first page", url)
+
+
+async def _legacy_home_page(hass: HomeAssistant, base: str, legacy: str) -> tuple[str, str]:
+    """(URL, name) of an old home: a website, a Home Assistant page, or the
+    default dashboard. One on a dashboard deleted since falls back to that."""
+    if "://" in legacy:
+        return legacy, urlparse(legacy).hostname or legacy
+    labels = dict(await async_ha_pages(hass))
+    path = legacy.strip("/")
+    first = path.split("/", 1)[0]
+    if legacy == HA_DEFAULT_PAGE or ("-" in first and first not in kiosk_dashboards(hass)):
+        return base, "Home Assistant"
+    return ha_page_url(base, path), labels.get(path, path)

@@ -24,21 +24,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "Home and pages",
-        "description": "Where this device starts and where its Home button goes, and the pages you can switch it to. Admin-only dashboards are not listed, because the device signs in as a regular user.",
+        "title": "Pages",
+        "description": "The pages this device shows. The first page is its home: it starts there, and its Home button goes back to it.",
         "data": {
-          "home": "Home",
           "pages": "Pages"
         },
         "data_description": {
-          "home": "A dashboard or one of its tabs. You can also type a path on Home Assistant, such as /energy, or any website. The device signs in to Home Assistant only, so another website is shown signed out.",
-          "pages": "Any website. The Page select switches between them, in this order."
+          "pages": "Each page is a Home Assistant page or any website, in this order. The Page select and the next/previous buttons switch between them. Admin-only dashboards are not listed, because the device signs in as a regular user; it signs in to Home Assistant only, so other websites are shown signed out."
         }
       }
     },
     "error": {
-      "invalid_home": "Choose a dashboard, or type a path or a full web address starting with http:// or https://.",
-      "invalid_url": "Each page needs a full web address starting with http:// or https://.",
+      "page_needs_one": "Give each page either a Home Assistant page or a website, not both.",
+      "invalid_url": "Each website needs a full web address starting with http:// or https://.",
+      "no_ha_url": "Home Assistant has no URL the device can reach. Set one under Settings → System → Network, or add the page as a website.",
       "cannot_connect": "Could not reach the device. Check it is on and try again."
     },
     "abort": {
@@ -49,7 +48,8 @@
     "pages": {
       "fields": {
         "name": "Name",
-        "url": "URL"
+        "ha_page": "Home Assistant page",
+        "url": "Website"
       }
     }
   },

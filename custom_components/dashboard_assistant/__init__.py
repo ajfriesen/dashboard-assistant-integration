@@ -21,12 +21,13 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_CERT_FINGERPRINT, CONF_HOME, LOGGER
+from .const import CONF_CERT_FINGERPRINT, CONF_LEGACY_HOME, HA_DEFAULT_PAGE, LOGGER
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
 )
 from .provision import (
+    async_apply_legacy_home,
     async_deprovision_kiosk_login,
     async_ensure_kiosk_username,
     async_provision_kiosk_login,
@@ -51,18 +52,25 @@ async def async_migrate_entry(
 ) -> bool:
     """Bring an entry made by an earlier version up to date.
 
-    1.1 → 1.2: the chosen dashboard, kept as the "dashboard" option, is now the
-    device's home (CONF_HOME), which can also be a tab or any website. Its
-    values mean the same thing, so it carries over as it is.
+    → 1.3: the device's home was an option of the entry, "dashboard" in 1.1
+    (release 1.0.0) and "home" in 1.2 (1.1.0-rc.1); without one it was Home
+    Assistant's default dashboard. It is now the device's first page, which the
+    device keeps, so it waits in the entry's data (CONF_LEGACY_HOME) until setup
+    reaches the device (async_apply_legacy_home).
     """
     if entry.version > 1:
         return False  # made by a newer version; refuse rather than guess
-    if entry.minor_version < 2:
+    if entry.minor_version < 3:
         options = dict(entry.options)
-        if "dashboard" in options:
-            options[CONF_HOME] = options.pop("dashboard")
-        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
-        LOGGER.debug("Migrated entry %s to 1.2", entry.entry_id)
+        legacy = options.pop("home", None) or options.pop("dashboard", None)
+        options.pop("dashboard", None)
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_LEGACY_HOME: legacy or HA_DEFAULT_PAGE},
+            options=options,
+            minor_version=3,
+        )
+        LOGGER.debug("Migrated entry %s to 1.3", entry.entry_id)
     return True
 
 
@@ -100,6 +108,17 @@ async def async_setup_entry(
 
     entry.runtime_data = coordinator
 
+    # An entry made before 1.3 kept the device's home as an option; it is now
+    # the first page. Before the login below, which for an older device
+    # carries that page.
+    try:
+        await async_apply_legacy_home(hass, entry, coordinator)
+    except DashboardAssistantError:
+        LOGGER.warning(
+            "Could not make the device's old home its first page; trying again on the next setup",
+            exc_info=True,
+        )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Self-healing kiosk-login provisioning: create a dedicated HA user + token
@@ -109,10 +128,11 @@ async def async_setup_entry(
     # one-shot at setup or a manual button couldn't recover a failed attempt.
     # Instead we re-attempt on each healthy coordinator refresh until the login has
     # actually landed on the device (CONF_KIOSK_PROVISIONED). The same path
-    # re-pushes it when the URLs it carried (CONF_KIOSK_URL, CONF_KIOSK_HOME_URL)
-    # are out of date: the home option changed (the options flow reloads the
-    # entry, and setup finds it stale), or Home Assistant's own URL changed in its network
-    # settings, which reloads nothing, so that one is caught from the event.
+    # re-pushes it when the URL it carried (CONF_KIOSK_URL) is out of date: Home
+    # Assistant's own URL changed in its network settings, which reloads
+    # nothing, so that one is caught from the event; or, for a device older
+    # than home_is_first_page, its first page changed, caught from the
+    # coordinator's update.
     # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
     # and the lock keeps overlapping refreshes from provisioning twice.
     provision_lock = asyncio.Lock()

@@ -41,7 +41,7 @@ class FakeDevice:
 
 async def _entry(hass: HomeAssistant, **data: Any) -> MockConfigEntry:
     await hass.config.async_update(internal_url=KIOSK_HA_URL)
-    entry = MockConfigEntry(domain=DOMAIN, data=data)
+    entry = MockConfigEntry(domain=DOMAIN, minor_version=3, data=data)
     entry.add_to_hass(hass)
     return entry
 
