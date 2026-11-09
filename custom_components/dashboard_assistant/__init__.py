@@ -28,6 +28,7 @@ from .coordinator import (
 )
 from .provision import (
     async_deprovision_kiosk_login,
+    async_ensure_kiosk_username,
     async_provision_kiosk_login,
     kiosk_login_is_current,
 )
@@ -124,6 +125,7 @@ async def async_setup_entry(
     # Attempt immediately — the first refresh above already succeeded, so the
     # device is reachable and a healthy one is signed in before setup returns.
     await _ensure_kiosk_login()
+    await async_ensure_kiosk_username(hass, entry, info)
 
     return True
 

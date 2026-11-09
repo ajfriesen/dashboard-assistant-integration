@@ -14,10 +14,12 @@ removed, so we do not leave an orphan behind.
 
 from __future__ import annotations
 
+import secrets
 from datetime import timedelta
 
 from homeassistant.auth.const import GROUP_ID_USER
-from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN
+from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN, User
+from homeassistant.auth.providers import homeassistant as auth_ha
 from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.core import HomeAssistant
@@ -60,8 +62,7 @@ async def async_provision_kiosk_login(
     # short MAC also matches the device card's MAC connection, so user and device
     # cross-reference. The token carries the same label.
     info = await client.async_get_info()
-    mac = info.get("mac") or ""
-    mac_short = mac.replace(":", "")[-6:] or info.get("node_id") or "unknown"
+    mac_short = _mac_short(info)
     base_name = info.get("name") or KIOSK_USER_NAME
     if mac_short.lower() in base_name.lower():
         user_name = base_name
@@ -83,6 +84,7 @@ async def async_provision_kiosk_login(
         )
     elif user.name != user_name:
         await hass.auth.async_update_user(user, name=user_name)
+    await _async_ensure_username(hass, user, _kiosk_username(mac_short))
 
     # Reuse the recorded long-lived refresh token if it still exists, else create
     # one, labelled with the MAC. The access token below is derived from it and is
@@ -139,6 +141,70 @@ async def async_provision_kiosk_login(
             data={**entry.data, CONF_KIOSK_PROVISIONED: True, CONF_KIOSK_URL: ha_url},
         )
     LOGGER.info("Provisioned kiosk login for user %s", user.id)
+
+
+def _mac_short(info: dict) -> str:
+    """The per-device id that suffixes the kiosk user's name and username."""
+    mac = info.get("mac") or ""
+    return mac.replace(":", "")[-6:] or info.get("node_id") or "unknown"
+
+
+def _kiosk_username(mac_short: str) -> str:
+    return f"dashboard-assistant-{mac_short.lower()}"
+
+
+async def async_ensure_kiosk_username(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry, info: dict
+) -> None:
+    """Give an already-provisioned kiosk user its username login.
+
+    Provisioning only reruns when the device's login is stale, so a kiosk user
+    created before usernames existed would otherwise never get one.
+    """
+    user_id = entry.data.get(CONF_KIOSK_USER_ID)
+    if user_id and (user := await hass.auth.async_get_user(user_id)):
+        await _async_ensure_username(hass, user, _kiosk_username(_mac_short(info)))
+
+
+async def _async_ensure_username(hass: HomeAssistant, user: User, username: str) -> None:
+    """Give the kiosk user a username/password login if it has none.
+
+    Nobody signs in with it: the kiosk uses its token. It exists because add-ons
+    opened through Ingress, Music Assistant among them, learn who is signed in
+    from the X-Remote-User-Name header, and the Supervisor only sends that for a
+    user with a username — which Home Assistant only keeps on a login of its
+    own (homeassistant) auth provider. The password is random and thrown away.
+
+    Done the way Home Assistant's own "add login" does it
+    (config/auth_provider/homeassistant/create), and checked on every run so a
+    user provisioned before this gets one too. Removing the user removes the
+    login with it.
+    """
+    if any(c.auth_provider_type == "homeassistant" for c in user.credentials):
+        return
+    # An install can configure the username/password provider away (only
+    # trusted_networks, say). The kiosk's token works regardless.
+    provider = next(
+        (p for p in hass.auth.auth_providers if isinstance(p, auth_ha.HassAuthProvider)),
+        None,
+    )
+    if provider is None:
+        LOGGER.warning(
+            "Home Assistant has no username/password logins, so add-ons opened "
+            "through Ingress, such as Music Assistant, cannot sign the device in"
+        )
+        return
+    try:
+        await provider.async_add_auth(username, secrets.token_urlsafe(32))
+    except auth_ha.InvalidUser:
+        LOGGER.warning(
+            "Username %s is taken, so add-ons opened through Ingress, such as "
+            "Music Assistant, cannot sign the device in",
+            username,
+        )
+        return
+    credentials = await provider.async_get_or_create_credentials({"username": username})
+    await hass.auth.async_link_user(user, credentials)
 
 
 async def async_deprovision_kiosk_login(
