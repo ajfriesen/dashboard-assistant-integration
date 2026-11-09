@@ -8,6 +8,25 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.1.0-rc.3](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2026-11-09)
+
+
+### Features
+
+* offer apps such as Music Assistant as pages, and admin-only pages to an admin device user ([bc407b7](https://github.com/ajfriesen/dashboard-assistant-integration/commit/bc407b70a98fd3697fbdedfe13d89b428d8a043d))
+* offer apps such as Music Assistant as pages, and admin-only pages to an admin device user ([1097fd3](https://github.com/ajfriesen/dashboard-assistant-integration/commit/1097fd307841445ff578aa892c08029b87f0a1e0))
+
+
+### Bug Fixes
+
+* name the page and the problem when the page form refuses one ([8db4020](https://github.com/ajfriesen/dashboard-assistant-integration/commit/8db40200558813d9e81aeb9e3812b9f6644b6eff))
+* name the page and the problem when the page form refuses one ([4d17946](https://github.com/ajfriesen/dashboard-assistant-integration/commit/4d179465fb199e8744a3805ee0b45df76293e8f1))
+
+
+### Miscellaneous Chores
+
+* cut 1.1.0-rc.3 ([9414400](https://github.com/ajfriesen/dashboard-assistant-integration/commit/941440021ea3d3ac22c5706d31be0c770a703835))
+
 ## [1.1.0-rc.2](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2026-11-09)
 
 
