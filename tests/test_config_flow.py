@@ -279,6 +279,7 @@ async def _setup_against(
     aioclient_mock.get(f"{BASE}/info", **info_mock)
     entry = MockConfigEntry(
         domain=DOMAIN,
+        minor_version=3,
         unique_id="da_555d31459f86",
         data={
             CONF_HOST: HOST,

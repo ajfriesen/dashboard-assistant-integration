@@ -201,21 +201,18 @@ class DashboardAssistantClient:
         return await self._request("GET", "/state")
 
     async def async_kiosk_login(
-        self, token: str, ha_url: str | None = None, home_url: str | None = None
+        self, token: str, ha_url: str | None = None
     ) -> dict[str, Any]:
         """Stage a Home Assistant login on the device.
 
         Hands the kiosk a long-lived access token so its browser signs in
         automatically — no one has to type HA credentials on the device — and
-        optionally Home Assistant's URL (the kiosk signs in only on its origin)
-        with the device's home, where it starts and where Home goes. The daemon
-        persists them and relaunches the kiosk.
+        optionally Home Assistant's URL, the only origin the kiosk signs in on.
+        The daemon persists them and relaunches the kiosk.
         """
         payload: dict[str, Any] = {"token": token}
         if ha_url:
             payload["ha_url"] = ha_url
-            if home_url:
-                payload["home_url"] = home_url
         return await self._request("POST", "/kiosk_login", payload)
 
     async def async_set_display(

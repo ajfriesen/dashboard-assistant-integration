@@ -13,7 +13,6 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
-    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import callback
@@ -22,8 +21,6 @@ from homeassistant.helpers.selector import (
     ObjectSelector,
     ObjectSelectorConfig,
     SelectOptionDict,
-    SelectSelector,
-    SelectSelectorConfig,
     SelectSelectorMode,
 )
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -40,26 +37,24 @@ from .api import (
 )
 from .const import (
     CONF_CERT_FINGERPRINT,
-    CONF_HOME,
     CONF_PAGES,
-    DEFAULT_HOME,
     DEFAULT_PORT,
     DOMAIN,
 )
-from .provision import async_kiosk_homes, is_website
+from .provision import async_ha_pages, ha_base_url, ha_page_url, ha_page_value
 
 
 class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Dashboard Assistant."""
 
     VERSION = 1
-    # 1.2: the "dashboard" option became "home" (see async_migrate_entry).
-    MINOR_VERSION = 2
+    # 1.3: the home became the first page (see async_migrate_entry).
+    MINOR_VERSION = 3
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """The device's home, and its pages."""
+        """The device's pages, the first of which is its home."""
         return DashboardAssistantOptionsFlow()
 
     def __init__(self) -> None:
@@ -214,21 +209,19 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
 
-class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
-    """Pick the device's home, and edit its pages.
+class DashboardAssistantOptionsFlow(OptionsFlow):
+    """Edit the device's pages, the first of which is its home.
 
-    Preferences rather than connection data, so they live here and not in the
-    config flow: pairing stays one click, and both can change at any time.
+    A preference rather than connection data, so it lives here and not in the
+    config flow: pairing stays one click, and the pages can change at any time.
 
-    The home is where the device starts and where its Home button goes: a
-    dashboard, one of its tabs, or (typed in) any path or website.
-
-    The two are kept differently. The home is stored in the entry's options;
-    saving reloads the entry, and setup pushes the kiosk login again with the
-    new home's URL (see kiosk_login_is_current). The pages are
-    not stored here at all: the device keeps the one copy of its page list,
-    so the form starts from what the device reports and saving writes the list
-    straight back to it.
+    Each page is a Home Assistant page, picked from its dashboards and their
+    tabs, or any website. The device starts on the first page and its Home
+    button goes back to it. Nothing is stored here: the device keeps the one
+    copy of its page list, as names and URLs, so the form starts from what the
+    device reports and saving writes the list straight back to it. No reload
+    either: the coordinator's update re-pushes the login if it needs to (see
+    wanted_kiosk_url).
     """
 
     async def async_step_init(
@@ -239,58 +232,51 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
             # The pages come from the device, so there is nothing to show.
             return self.async_abort(reason="device_unavailable")
         coordinator = entry.runtime_data
+        base = ha_base_url(self.hass)
+        ha_pages = await async_ha_pages(self.hass)
 
         errors: dict[str, str] = {}
         if user_input is not None:
             pages = user_input.get(CONF_PAGES, [])
-            home = user_input[CONF_HOME].strip()
-            if not _home_is_valid(home):
-                errors[CONF_HOME] = "invalid_home"
-            elif error := _check_pages(pages):
-                errors[CONF_PAGES] = error
+            try:
+                wanted = _to_device(pages, base, dict(ha_pages))
+            except _PageError as err:
+                errors[CONF_PAGES] = str(err)
             else:
                 try:
-                    await _write_pages(coordinator, pages)
+                    await _write_pages(coordinator, wanted)
                 except DashboardAssistantError:
                     errors["base"] = "cannot_connect"
                 else:
-                    return self.async_create_entry(data={CONF_HOME: home})
-
-        homes = [
-            SelectOptionDict(value=value, label=label)
-            for value, label in await async_kiosk_homes(self.hass)
-        ]
-        if user_input is not None:
-            current = user_input[CONF_HOME]
-            pages = user_input.get(CONF_PAGES, [])
+                    return self.async_create_entry(data={})
         else:
-            current = entry.options.get(CONF_HOME, DEFAULT_HOME)
-            pages = _device_pages(coordinator.data)
+            pages = _to_form(
+                _device_pages(coordinator.data), base, [value for value, _ in ha_pages]
+            )
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_HOME, default=current): SelectSelector(
-                        SelectSelectorConfig(
-                            options=homes,
-                            mode=SelectSelectorMode.DROPDOWN,
-                            # Anything not listed: a path on Home Assistant
-                            # (a panel, a subview) or any website.
-                            custom_value=True,
-                        )
-                    ),
                     vol.Optional(CONF_PAGES, default=pages): ObjectSelector(
                         ObjectSelectorConfig(
                             fields={
                                 "name": {"selector": {"text": {}}},
-                                "url": {
-                                    "required": True,
-                                    "selector": {"text": {"type": "url"}},
+                                "ha_page": {
+                                    "selector": {
+                                        "select": {
+                                            "options": [
+                                                SelectOptionDict(value=value, label=label)
+                                                for value, label in ha_pages
+                                            ],
+                                            "mode": SelectSelectorMode.DROPDOWN,
+                                        }
+                                    }
                                 },
+                                "url": {"selector": {"text": {"type": "url"}}},
                             },
                             multiple=True,
                             label_field="name",
-                            description_field="url",
                             translation_key=CONF_PAGES,
                         )
                     ),
@@ -300,12 +286,8 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
         )
 
 
-def _home_is_valid(home: str) -> bool:
-    """A website must be a full http(s) address; a path just must not be empty."""
-    if is_website(home):
-        url = urlparse(home)
-        return url.scheme in ("http", "https") and bool(url.netloc)
-    return bool(home.strip("/"))
+class _PageError(Exception):
+    """A page the form refuses; the message is the error's translation key."""
 
 
 def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:
@@ -313,26 +295,52 @@ def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:
     return [{"name": p["name"], "url": p["url"]} for p in data["page"]["list"]]
 
 
-def _clean(pages: list[dict[str, Any]]) -> list[dict[str, str]]:
-    return [
-        {"name": str(p.get("name", "")).strip(), "url": str(p.get("url", "")).strip()}
-        for p in pages
-    ]
+def _to_form(
+    pages: list[dict[str, str]], base: str | None, values: list[str]
+) -> list[dict[str, str]]:
+    """Device pages as the form shows them: a URL that is one of Home
+    Assistant's pages as that page, anything else as a website."""
+    shown = []
+    for page in pages:
+        value = ha_page_value(base, page["url"], values) if base else None
+        if value is None:
+            shown.append({"name": page["name"], "url": page["url"]})
+        else:
+            shown.append({"name": page["name"], "ha_page": value})
+    return shown
 
 
-def _check_pages(pages: list[dict[str, Any]]) -> str | None:
-    """The same check the device makes, so a refusal keeps the user in the form."""
-    for page in _clean(pages):
-        url = urlparse(page["url"])
-        if url.scheme not in ("http", "https") or not url.netloc:
-            return "invalid_url"
-    return None
+def _to_device(
+    pages: list[dict[str, Any]], base: str | None, labels: dict[str, str]
+) -> list[dict[str, str]]:
+    """Form pages as the device keeps them: a name and a URL each.
+
+    Each needs exactly one of a Home Assistant page and a website, and a
+    website the same check the device makes, so a refusal keeps the user in
+    the form. An unnamed Home Assistant page is named after it.
+    """
+    out = []
+    for page in pages:
+        name = str(page.get("name") or "").strip()
+        ha_page = str(page.get("ha_page") or "").strip()
+        url = str(page.get("url") or "").strip()
+        if bool(ha_page) == bool(url):
+            raise _PageError("page_needs_one")
+        if ha_page:
+            if base is None:
+                raise _PageError("no_ha_url")
+            out.append({"name": name or labels.get(ha_page, ha_page), "url": ha_page_url(base, ha_page)})
+            continue
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise _PageError("invalid_url")
+        out.append({"name": name, "url": url})
+    return out
 
 
-async def _write_pages(coordinator: Any, pages: list[dict[str, Any]]) -> None:
-    """Make the device's page list exactly ``pages``, in order."""
-    wanted = _clean(pages)
+async def _write_pages(coordinator: Any, wanted: list[dict[str, str]]) -> None:
+    """Make the device's page list exactly ``wanted``, in order."""
     if wanted == _device_pages(coordinator.data):
-        return  # saving only the dashboard should not rewrite the pages
+        return  # an unchanged list should not rewrite the device's
     snapshot = await coordinator.client.async_set_pages(wanted)
     coordinator.async_set_updated_data(snapshot)

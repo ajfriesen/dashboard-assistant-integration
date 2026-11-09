@@ -3,6 +3,7 @@
   "has_btrfs": true,
   "has_sendspin": true,
   "has_temperature": true,
+  "home_is_first_page": true,
   "hostname": "dashboard-assistant-d7bbb4",
   "installable": true,
   "mac": "88:a2:9e:d7:bb:b4",
