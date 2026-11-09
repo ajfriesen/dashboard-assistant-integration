@@ -88,9 +88,9 @@ async def async_setup_entry(
     # one-shot at setup or a manual button couldn't recover a failed attempt.
     # Instead we re-attempt on each healthy coordinator refresh until the login has
     # actually landed on the device (CONF_KIOSK_PROVISIONED). The same path
-    # re-pushes it when the URL it carried (CONF_KIOSK_URL) is out of date: the
-    # dashboard option changed (the options flow reloads the entry, and setup
-    # finds it stale), or Home Assistant's own URL changed in its network
+    # re-pushes it when the URLs it carried (CONF_KIOSK_URL, CONF_KIOSK_HOME_URL)
+    # are out of date: the home option changed (the options flow reloads the
+    # entry, and setup finds it stale), or Home Assistant's own URL changed in its network
     # settings, which reloads nothing, so that one is caught from the event.
     # async_provision_kiosk_login is idempotent (reuses the recorded user/token),
     # and the lock keeps overlapping refreshes from provisioning twice.

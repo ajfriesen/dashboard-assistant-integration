@@ -40,13 +40,13 @@ from .api import (
 )
 from .const import (
     CONF_CERT_FINGERPRINT,
-    CONF_DASHBOARD,
+    CONF_HOME,
     CONF_PAGES,
-    DEFAULT_DASHBOARD,
+    DEFAULT_HOME,
     DEFAULT_PORT,
     DOMAIN,
 )
-from .provision import kiosk_dashboards
+from .provision import async_kiosk_homes, is_website
 
 
 class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -57,7 +57,7 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Which dashboard the device shows, and its pages."""
+        """The device's home, and its pages."""
         return DashboardAssistantOptionsFlow()
 
     def __init__(self) -> None:
@@ -213,14 +213,17 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
-    """Pick the dashboard the device shows, and edit its pages.
+    """Pick the device's home, and edit its pages.
 
     Preferences rather than connection data, so they live here and not in the
     config flow: pairing stays one click, and both can change at any time.
 
-    The two are kept differently. The dashboard is stored in the entry's
-    options; saving reloads the entry, and setup pushes the kiosk login again
-    with the new dashboard's URL (see kiosk_login_is_current). The pages are
+    The home is where the device starts and where its Home button goes: a
+    dashboard, one of its tabs, or (typed in) any path or website.
+
+    The two are kept differently. The home is stored in the entry's options;
+    saving reloads the entry, and setup pushes the kiosk login again with the
+    new home's URL (see kiosk_login_is_current). The pages are
     not stored here at all: the device keeps the one copy of its page list,
     so the form starts from what the device reports and saving writes the list
     straight back to it.
@@ -238,7 +241,10 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
         errors: dict[str, str] = {}
         if user_input is not None:
             pages = user_input.get(CONF_PAGES, [])
-            if error := _check_pages(pages):
+            home = user_input[CONF_HOME].strip()
+            if not _home_is_valid(home):
+                errors[CONF_HOME] = "invalid_home"
+            elif error := _check_pages(pages):
                 errors[CONF_PAGES] = error
             else:
                 try:
@@ -246,32 +252,29 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
                 except DashboardAssistantError:
                     errors["base"] = "cannot_connect"
                 else:
-                    return self.async_create_entry(
-                        data={CONF_DASHBOARD: user_input[CONF_DASHBOARD]}
-                    )
+                    return self.async_create_entry(data={CONF_HOME: home})
 
-        dashboards = [
-            SelectOptionDict(value=DEFAULT_DASHBOARD, label="Home Assistant default")
-        ]
-        dashboards += [
-            SelectOptionDict(value=url_path, label=title)
-            for url_path, title in sorted(
-                kiosk_dashboards(self.hass).items(), key=lambda item: item[1].lower()
-            )
+        homes = [
+            SelectOptionDict(value=value, label=label)
+            for value, label in await async_kiosk_homes(self.hass)
         ]
         if user_input is not None:
-            current = user_input[CONF_DASHBOARD]
+            current = user_input[CONF_HOME]
             pages = user_input.get(CONF_PAGES, [])
         else:
-            current = entry.options.get(CONF_DASHBOARD, DEFAULT_DASHBOARD)
+            current = entry.options.get(CONF_HOME, DEFAULT_HOME)
             pages = _device_pages(coordinator.data)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_DASHBOARD, default=current): SelectSelector(
+                    vol.Required(CONF_HOME, default=current): SelectSelector(
                         SelectSelectorConfig(
-                            options=dashboards, mode=SelectSelectorMode.DROPDOWN
+                            options=homes,
+                            mode=SelectSelectorMode.DROPDOWN,
+                            # Anything not listed: a path on Home Assistant
+                            # (a panel, a subview) or any website.
+                            custom_value=True,
                         )
                     ),
                     vol.Optional(CONF_PAGES, default=pages): ObjectSelector(
@@ -293,6 +296,14 @@ class DashboardAssistantOptionsFlow(OptionsFlowWithReload):
             ),
             errors=errors,
         )
+
+
+def _home_is_valid(home: str) -> bool:
+    """A website must be a full http(s) address; a path just must not be empty."""
+    if is_website(home):
+        url = urlparse(home)
+        return url.scheme in ("http", "https") and bool(url.netloc)
+    return bool(home.strip("/"))
 
 
 def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:

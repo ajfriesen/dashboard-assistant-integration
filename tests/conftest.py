@@ -20,6 +20,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.dashboard_assistant.const import (
     CONF_CERT_FINGERPRINT,
     CONF_KIOSK_PROVISIONED,
+    CONF_KIOSK_HOME_URL,
     CONF_KIOSK_URL,
     DOMAIN,
 )
@@ -100,6 +101,7 @@ async def setup_device(
             # internals and is out of scope for entity/command tests.
             CONF_KIOSK_PROVISIONED: True,
             CONF_KIOSK_URL: KIOSK_HA_URL,
+            CONF_KIOSK_HOME_URL: KIOSK_HA_URL,
         },
     )
     entry.add_to_hass(hass)

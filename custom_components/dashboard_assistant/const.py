@@ -33,11 +33,12 @@ CONF_KIOSK_REFRESH_TOKEN_ID = "kiosk_refresh_token_id"
 # push) so the self-healing retry knows whether the device itself is signed in,
 # not just whether the HA-side user exists.
 CONF_KIOSK_PROVISIONED = "kiosk_provisioned"
-# The URL that login carried: Home Assistant's own URL plus the chosen
-# dashboard. Either can change (the CONF_DASHBOARD option, or the URL in Home
-# Assistant's network settings), and when the URL Home Assistant would send now
-# differs from this one, the login is pushed again.
+# The two URLs that login carried: Home Assistant's own URL, which the device
+# signs in on, and the device's home (see CONF_HOME). Either can change (the
+# option, or the URL in Home Assistant's network settings), and when the URLs
+# Home Assistant would send now differ from these, the login is pushed again.
 CONF_KIOSK_URL = "kiosk_url"
+CONF_KIOSK_HOME_URL = "kiosk_home_url"
 
 # SHA-256 of the device's TLS certificate, pinned when the device pairs; every
 # authenticated call is made over TLS against it (see pin_for in api.py). Not a
@@ -50,14 +51,16 @@ CONF_CERT_FINGERPRINT = "cert_fingerprint"
 # is a safety net in case the stream drops without the socket erroring.
 POLL_INTERVAL = timedelta(seconds=60)
 
-# Options: the dashboard the device shows, by its url_path. DEFAULT_DASHBOARD
-# means Home Assistant's own default dashboard, i.e. its bare URL. Not "": the
-# frontend's select can read an empty value as nothing chosen. No dashboard
-# can be called "default": Home Assistant requires a hyphen in the url_path of
-# a dashboard a user creates, and its built-in ones are named for what they
-# show (lovelace, map, energy, ...).
-CONF_DASHBOARD = "dashboard"
-DEFAULT_DASHBOARD = "default"
+# Options: the device's home, where it starts and where its Home button goes.
+# DEFAULT_HOME means Home Assistant's own default dashboard, i.e. its bare URL.
+# Anything else is a path on Home Assistant (a dashboard's url_path, or
+# "<url_path>/<view>" for one of its tabs) or, when it has a scheme, any
+# website. Not "": the frontend's select can read an empty value as nothing
+# chosen. No dashboard can be called "default": Home Assistant requires a hyphen
+# in the url_path of a dashboard a user creates, and its built-in ones are named
+# for what they show (lovelace, map, energy, ...).
+CONF_HOME = "home"
+DEFAULT_HOME = "default"
 
 # The pages field of the options form: a list of {"name", "url"}. Never stored
 # in the entry; the device owns its page list (see DashboardAssistantOptionsFlow).
