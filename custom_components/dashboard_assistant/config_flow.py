@@ -41,7 +41,13 @@ from .const import (
     DEFAULT_PORT,
     DOMAIN,
 )
-from .provision import async_ha_pages, ha_base_url, ha_page_url, ha_page_value
+from .provision import (
+    async_ha_pages,
+    async_kiosk_is_admin,
+    ha_base_url,
+    ha_page_url,
+    ha_page_value,
+)
 
 
 class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -233,7 +239,9 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
             return self.async_abort(reason="device_unavailable")
         coordinator = entry.runtime_data
         base = ha_base_url(self.hass)
-        ha_pages = await async_ha_pages(self.hass)
+        ha_pages = await async_ha_pages(
+            self.hass, await async_kiosk_is_admin(self.hass, entry)
+        )
 
         errors: dict[str, str] = {}
         placeholders: dict[str, str] = {}

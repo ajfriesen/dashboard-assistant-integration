@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 from homeassistant.auth.const import GROUP_ID_USER
 from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN, User
 from homeassistant.auth.providers import homeassistant as auth_ha
+from homeassistant.components.frontend import DATA_PANELS
 from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.core import HomeAssistant
@@ -267,12 +268,26 @@ def same_origin(url: str, base: str) -> bool:
     return (a.scheme, a.netloc) == (b.scheme, b.netloc)
 
 
-def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
+async def async_kiosk_is_admin(
+    hass: HomeAssistant, entry: DashboardAssistantConfigEntry
+) -> bool:
+    """Whether the device's user is an administrator.
+
+    It is created as a regular user, but the owner may make it an admin in
+    Home Assistant's user settings; provisioning never changes it back. Asked
+    each time, so the pages offered follow that change without a reload.
+    """
+    user_id = entry.data.get(CONF_KIOSK_USER_ID)
+    user = await hass.auth.async_get_user(user_id) if user_id else None
+    return user is not None and user.is_admin
+
+
+def kiosk_dashboards(hass: HomeAssistant, admin: bool) -> dict[str, str]:
     """The dashboards the kiosk can open, as {url_path: title}.
 
     Leaves out Home Assistant's default dashboard, which is offered separately
-    as its bare URL, and admin-only ones: the kiosk signs in as a non-admin
-    user, so it could only ever show an error for those.
+    as its bare URL, and, unless the kiosk's user is an admin, admin-only ones:
+    it could only ever show an error for those.
     """
     data = hass.data.get(LOVELACE_DATA)
     if data is None:
@@ -282,28 +297,62 @@ def kiosk_dashboards(hass: HomeAssistant) -> dict[str, str]:
         config = dashboard.config
         if not url_path or url_path == LOVELACE_DOMAIN or not config:
             continue
-        if config.get("require_admin"):
+        if config.get("require_admin") and not admin:
             continue
         found[url_path] = config.get("title") or url_path
     return found
 
 
-async def async_ha_pages(hass: HomeAssistant) -> list[tuple[str, str]]:
+def kiosk_apps(hass: HomeAssistant, admin: bool) -> dict[str, str]:
+    """The apps (add-ons) with a sidebar panel the kiosk can open, as
+    {url_path: title}, such as Music Assistant.
+
+    The Supervisor registers each app's ingress panel as a frontend panel whose
+    config names the app ("addon", or "ingress" in older releases).
+    Admin-only panels (the app's panel_admin) are left out unless the kiosk's
+    user is an admin, as for dashboards: a regular user may not open them.
+    """
+    found: dict[str, str] = {}
+    for url_path, panel in hass.data.get(DATA_PANELS, {}).items():
+        config = panel.config or {}
+        if not ("addon" in config or "ingress" in config):
+            continue
+        if panel.require_admin and not admin:
+            continue
+        found[url_path] = panel.sidebar_title or url_path
+    return found
+
+
+async def async_ha_pages(hass: HomeAssistant, admin: bool) -> list[tuple[str, str]]:
     """The Home Assistant pages a page can be, as (value, label): Home
-    Assistant's default, the built-in Overview's tabs, then each dashboard the
-    kiosk can open followed by its tabs.
+    Assistant's default, the built-in Overview's tabs, each dashboard the
+    kiosk can open followed by its tabs, then the apps it can open.
     """
     pages = [(HA_DEFAULT_PAGE, "Home Assistant default")]
-    data = hass.data.get(LOVELACE_DATA)
-    if data is None:
-        return pages
+    if (data := hass.data.get(LOVELACE_DATA)) is not None:
+        pages += await _dashboard_pages(hass, data, admin)
+    pages += [
+        (url_path, title)
+        for url_path, title in sorted(
+            kiosk_apps(hass, admin).items(), key=lambda item: item[1].lower()
+        )
+    ]
+    return pages
+
+
+async def _dashboard_pages(
+    hass: HomeAssistant, data: Any, admin: bool
+) -> list[tuple[str, str]]:
+    """The Overview's tabs, then each dashboard the kiosk can open followed by
+    its tabs."""
+    pages: list[tuple[str, str]] = []
     if (overview := data.dashboards.get(None)) is not None:
         pages += [
             (f"{LOVELACE_DOMAIN}/{path}", f"Overview › {title}")
             for path, title in await _tabs(overview)
         ]
     for url_path, name in sorted(
-        kiosk_dashboards(hass).items(), key=lambda item: item[1].lower()
+        kiosk_dashboards(hass, admin).items(), key=lambda item: item[1].lower()
     ):
         pages.append((url_path, name))
         pages += [
@@ -369,7 +418,8 @@ async def async_apply_legacy_home(
     legacy = entry.data.get(CONF_LEGACY_HOME)
     if legacy is None or (base := ha_base_url(hass)) is None:
         return
-    url, name = await _legacy_home_page(hass, base, legacy)
+    admin = await async_kiosk_is_admin(hass, entry)
+    url, name = await _legacy_home_page(hass, base, legacy, admin)
     pages = [{"name": p["name"], "url": p["url"]} for p in coordinator.data["page"]["list"]]
     first = pages[0]["url"].rstrip("/") if pages else None
     if first != url.rstrip("/"):
@@ -383,14 +433,16 @@ async def async_apply_legacy_home(
     LOGGER.info("Made the device's old home, %s, its first page", url)
 
 
-async def _legacy_home_page(hass: HomeAssistant, base: str, legacy: str) -> tuple[str, str]:
+async def _legacy_home_page(
+    hass: HomeAssistant, base: str, legacy: str, admin: bool
+) -> tuple[str, str]:
     """(URL, name) of an old home: a website, a Home Assistant page, or the
     default dashboard. One on a dashboard deleted since falls back to that."""
     if "://" in legacy:
         return legacy, urlparse(legacy).hostname or legacy
-    labels = dict(await async_ha_pages(hass))
+    labels = dict(await async_ha_pages(hass, admin))
     path = legacy.strip("/")
     first = path.split("/", 1)[0]
-    if legacy == HA_DEFAULT_PAGE or ("-" in first and first not in kiosk_dashboards(hass)):
+    if legacy == HA_DEFAULT_PAGE or ("-" in first and first not in kiosk_dashboards(hass, admin)):
         return base, "Home Assistant"
     return ha_page_url(base, path), labels.get(path, path)

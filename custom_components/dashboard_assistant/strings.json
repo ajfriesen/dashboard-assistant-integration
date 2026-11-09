@@ -30,7 +30,7 @@
           "pages": "Pages"
         },
         "data_description": {
-          "pages": "Each page is a Home Assistant page or any website, in this order. The Page select and the next/previous buttons switch between them. Admin-only dashboards are not listed, because the device signs in as a regular user; it signs in to Home Assistant only, so other websites are shown signed out."
+          "pages": "Each page is a Home Assistant page or any website, in this order. The Page select and the next/previous buttons switch between them. Admin-only dashboards and apps are listed only if the device's user (dashboard-assistant-…) is an administrator, which you can change under Settings → People → Users. The device signs in to Home Assistant only, so other websites are shown signed out."
         }
       }
     },
@@ -48,9 +48,18 @@
   "selector": {
     "pages": {
       "fields": {
-        "name": "Name",
-        "ha_page": "Home Assistant page",
-        "url": "Website"
+        "name": {
+          "name": "Name",
+          "description": "Shown in the Page select. Leave empty to use the Home Assistant page's name."
+        },
+        "ha_page": {
+          "name": "Home Assistant page",
+          "description": "A dashboard, one of its tabs, or an app such as Music Assistant. Fill in this or Website, not both."
+        },
+        "url": {
+          "name": "Website",
+          "description": "Any website, starting with http:// or https://. Fill in this or Home Assistant page, not both."
+        }
       }
     }
   },
