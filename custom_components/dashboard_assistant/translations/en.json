@@ -35,9 +35,10 @@
       }
     },
     "error": {
-      "page_needs_one": "Give each page either a Home Assistant page or a website, not both.",
-      "invalid_url": "Each website needs a full web address starting with http:// or https://.",
-      "no_ha_url": "Home Assistant has no URL the device can reach. Set one under Settings → System → Network, or add the page as a website.",
+      "page_has_both": "“{page}” has a Home Assistant page and a website. A page shows one of them, so clear the other.",
+      "page_has_neither": "“{page}” has no Home Assistant page and no website. Pick one, or remove the page.",
+      "invalid_url": "“{page}”: a website needs a full address starting with http:// or https://.",
+      "no_ha_url": "“{page}”: Home Assistant has no URL the device can reach. Set one under Settings → System → Network, or add the page as a website.",
       "cannot_connect": "Could not reach the device. Check it is on and try again."
     },
     "abort": {

@@ -9,6 +9,7 @@ what it reports and saving writes the list straight back to it.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -30,6 +31,7 @@ from custom_components.dashboard_assistant.const import (
 from .conftest import BASE, FINGERPRINT, HOST, PORT, TOKEN, mock_daemon
 
 HA_URL = "http://ha.example:8123"
+COMPONENT = Path(__file__).parent.parent / "custom_components" / "dashboard_assistant"
 
 
 def _dashboard(
@@ -280,13 +282,28 @@ async def test_saving_unchanged_pages_writes_nothing(
 
 
 @pytest.mark.parametrize(
-    ("page", "error"),
+    ("page", "error", "message"),
     [
-        ({"name": "Bad", "url": "ftp://files.lan"}, "invalid_url"),
-        ({"name": "Bad", "url": "homeassistant.local:8123"}, "invalid_url"),
-        ({"name": "Bad", "url": "https://"}, "invalid_url"),
-        ({"name": "Neither"}, "page_needs_one"),
-        ({"name": "Both", "ha_page": "default", "url": "https://www.windy.com"}, "page_needs_one"),
+        (
+            {"name": "Files", "url": "ftp://files.lan"},
+            "invalid_url",
+            "“Files”: a website needs a full address starting with http:// or https://.",
+        ),
+        (
+            {"url": "homeassistant.local:8123"},
+            "invalid_url",
+            "“Page 2”: a website needs a full address starting with http:// or https://.",
+        ),
+        (
+            {"name": "Neither"},
+            "page_has_neither",
+            "“Neither” has no Home Assistant page and no website. Pick one, or remove the page.",
+        ),
+        (
+            {"name": "Both", "ha_page": "default", "url": "https://www.windy.com"},
+            "page_has_both",
+            "“Both” has a Home Assistant page and a website. A page shows one of them, so clear the other.",
+        ),
     ],
 )
 async def test_a_page_that_is_not_one_page_is_refused_in_the_form(
@@ -297,19 +314,40 @@ async def test_a_page_that_is_not_one_page_is_refused_in_the_form(
     dashboards: None,
     page: dict[str, str],
     error: str,
+    message: str,
 ) -> None:
-    """The device would refuse a bad address too; saying so here keeps the
-    user in the form."""
+    """The message names the page and says what is wrong with it, so the user
+    knows which entry to open. An unnamed page is named by its position.
+
+    The device would refuse a bad address too; saying so here keeps the user
+    in the form.
+    """
     entry = await _setup(hass, aioclient_mock, device_info, device_state)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_PAGES: [page]}
+        result["flow_id"],
+        {CONF_PAGES: [{"name": "Fine", "url": "https://www.windy.com"}, page]},
     )
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {CONF_PAGES: error}
+    assert _render_error(error, result["description_placeholders"]) == message
     assert _page_writes(aioclient_mock) == []
+
+
+def _render_error(key: str, placeholders: dict[str, str] | None) -> str:
+    """The error as Home Assistant shows it, from both translation sources.
+
+    strings.json and translations/en.json must agree: Home Assistant serves
+    the latter, and a key missing there is shown raw.
+    """
+    texts = [
+        json.loads((COMPONENT / name).read_text())["options"]["error"][key]
+        for name in ("strings.json", "translations/en.json")
+    ]
+    assert texts[0] == texts[1]
+    return texts[0].format(**(placeholders or {}))
 
 
 async def test_the_login_carries_home_assistants_own_url(

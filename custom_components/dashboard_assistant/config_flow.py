@@ -236,12 +236,14 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         ha_pages = await async_ha_pages(self.hass)
 
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
         if user_input is not None:
             pages = user_input.get(CONF_PAGES, [])
             try:
                 wanted = _to_device(pages, base, dict(ha_pages))
             except _PageError as err:
-                errors[CONF_PAGES] = str(err)
+                errors[CONF_PAGES] = err.key
+                placeholders["page"] = err.page
             else:
                 try:
                     await _write_pages(coordinator, wanted)
@@ -283,11 +285,18 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
                 }
             ),
             errors=errors,
+            description_placeholders=placeholders,
         )
 
 
 class _PageError(Exception):
-    """A page the form refuses; the message is the error's translation key."""
+    """A page the form refuses: the error's translation key, and the page it
+    names (``{page}`` in the message) so the user knows which to open."""
+
+    def __init__(self, key: str, page: str) -> None:
+        super().__init__(key)
+        self.key = key
+        self.page = page
 
 
 def _device_pages(data: dict[str, Any]) -> list[dict[str, str]]:
@@ -320,20 +329,23 @@ def _to_device(
     the form. An unnamed Home Assistant page is named after it.
     """
     out = []
-    for page in pages:
+    for position, page in enumerate(pages, start=1):
         name = str(page.get("name") or "").strip()
         ha_page = str(page.get("ha_page") or "").strip()
         url = str(page.get("url") or "").strip()
-        if bool(ha_page) == bool(url):
-            raise _PageError("page_needs_one")
+        shown = name or f"Page {position}"
+        if ha_page and url:
+            raise _PageError("page_has_both", shown)
+        if not ha_page and not url:
+            raise _PageError("page_has_neither", shown)
         if ha_page:
             if base is None:
-                raise _PageError("no_ha_url")
+                raise _PageError("no_ha_url", shown)
             out.append({"name": name or labels.get(ha_page, ha_page), "url": ha_page_url(base, ha_page)})
             continue
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise _PageError("invalid_url")
+            raise _PageError("invalid_url", shown)
         out.append({"name": name, "url": url})
     return out
 
