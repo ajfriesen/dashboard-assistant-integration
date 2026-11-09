@@ -8,6 +8,19 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.1.0-rc.2](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2026-11-09)
+
+
+### Features
+
+* make the first page the device's home, and pick pages from Home Assistant ([6fb48c3](https://github.com/ajfriesen/dashboard-assistant-integration/commit/6fb48c3b448bd04c56e46168d0f47736a488b23b))
+* make the first page the device's home, and pick pages from Home Assistant ([e171c57](https://github.com/ajfriesen/dashboard-assistant-integration/commit/e171c57de29c23cd4a331658698ea6db44b71e34))
+
+
+### Miscellaneous Chores
+
+* cut 1.1.0-rc.2 ([ac1709d](https://github.com/ajfriesen/dashboard-assistant-integration/commit/ac1709dab1dcaec15e96608cd9e9739bd888c152))
+
 ## [1.1.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.0.0...v1.1.0-rc.1) (2026-11-09)
 
 
