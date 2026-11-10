@@ -11,112 +11,51 @@ No complex setups, just a click.
 The easiest Home Assistant Kiosk setup.
 The tablet appears as a Home Assistant device and can be controlled:
 
-- **Light** — the display: on/off (DPMS) plus brightness (backlight).
-- **Select** — jump to any configured page.
-- **Buttons** — next/previous page, reboot, shut down, take screenshot.
-- **Select** — screen saver style (whatever the OS ships, e.g. clock, logo).
-- **Number** — browser zoom (25–400 %), and the screen saver timeout
-  (minutes without a touch, 0–240; 0 turns the idle trigger off).
-- **Switch** — dark mode, and the screen saver (on shows it now, off
-  dismisses it; it also follows the idle timeout and touches).
-- **Update** — OS release, with an Install button on images that can self-update.
-- **Image** — the latest screenshot.
-- **Sensors** — seconds since last touch, memory, storage, generations, CPU,
-  uptime, IP, hostname, model, serial, and (where present) battery and
-  temperature.
+- The display is a light. Turn it on/off or dimm.
+- Adjust the zoom
+- Switch between dark and light mode.
+- Configure pages you want to show. Not only Home Assistant, just any URL.
+  - allows you to show pages at specifc times
+  - or just cycle through them
+- Get OS updates via Home Assistant.
+- Take a screen shot from the panel.
+- Use a screen saver.
+- Last touch sensor, when you want to turn off the tablet after the last touch or go back to a specifc screen
 
-State updates arrive instantly over the SSE push stream, with a periodic poll as a fallback (`local_push`).
+## Installation
 
-## Installation (HACS)
+### 1. Install via Marketplace (formerly known as HACS).
 
-This integration isn't in the default HACS store, so it's added as a **custom repository** yet.
-You only do this once; updates then show up in HACS like any other.
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ajfriesen&repository=dashboard-assistant-integration)
 
-Waiting for this PR to get merged.
+Open it and click **Install**
 
-![GitHub pull request status](https://img.shields.io/github/status/s/pulls/hacs/default/11319)
+### Flash the device
 
-### Prerequisites
+Check the Dashboard Assistant OS documentation for that:
 
-- A running Home Assistant instance you can reach in a browser.
-- [HACS](https://hacs.xyz/) installed and set up.
-  If you don't have it yet, follow the official [HACS installation guide](https://hacs.xyz/docs/use/download/download/).
+https://dashboardassistant.org/getting-started/
 
-### 1. Add the custom repository
+### 2. Add the device
 
+Home Assistant **discovers** the device automatically when it joins the network.
 
-1. In Home Assistant, open **HACS** from the sidebar.
-2. Click the **⋮** menu in the top-right corner and choose **Custom repositories**.
-3. In the **Repository** field, paste:
+You should see it here:
 
-   ```
-   https://github.com/ajfriesen/dashboard-assistant-integration
-   ```
+[![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/?search=Dashboard+Assistant)
 
-4. Set **Type** (or **Category**) to **Integration**.
-5. Click **Add**, then close the dialog.
+### 3. Join the device
 
-### 2. Install the integration
+Click **Add**, give it a name and area if needed and then **Add** again.
+A sperate user for the Dashboard Assistant will be created and it will log in by itself.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ajfriesen&category=integration&repository=dashboard-assistant-integration)
+### 4. Configure pages to show on the device
 
-1. Open it and click **Download** (choose the latest version).
-2. **Restart Home Assistant** when prompted
-   (**Settings → System → Restart**). HACS only copies the files; Home
-   Assistant loads the integration on restart.
+Open the Dashboard Assistant settings:
 
+[![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/?search=Dashboard+Assistant)
 
-
-### 3. Add the device
-
-After the restart, Home Assistant **discovers** the device over mDNS: a
-"Dashboard Assistant" card appears under **Settings → Devices & services →
-Discovered**. Click **Add**, then **Add** again. The device hands over its API
-token by itself, so there is nothing to type, and it appears as a single device
-with all its entities.
-
-Discovery is the only way in. If the card does not appear, Home Assistant cannot
-see the device's mDNS announcement, usually because the two are on different
-networks or VLANs.
-
-A device pairs once. To move it to another Home Assistant, press its
-**Factory reset** button first: the device forgets its pairing and its Wi-Fi,
-and the entry is removed, so the device is discovered again once it is back on
-a network (a Wi-Fi device rejoins from the seed file on its boot medium, so
-write a new one if it is moving to another network). A device whose entry
-was deleted without a reset cannot pair again until it is reflashed.
-
-If an update misbehaves, the **Roll back** button boots the previous system
-generation. On a device that has only one, the press is refused.
-
-### 4. Choose the dashboard and pages
-
-Open **Settings → Devices & services → Dashboard Assistant** and click
-**Configure**:
-
-- **Dashboard** — the device shows Home Assistant's default dashboard until you
-  pick another. Admin-only dashboards are not listed, because the device signs
-  in as a regular user.
-- **Pages** — any number of pages, each a name and the address of any website. The
-  **Page** select and the next/previous buttons switch between them, in this
-  order.
-
-Saving sends both to the device straight away.
-
-### Updating
-
-When a new release is published, HACS shows an update on the **Dashboard
-Assistant** card. Click **Update**, then restart Home Assistant.
-
-## Manual installation
-
-If you'd rather not use HACS, copy the integration in by hand:
-
-1. Copy the `custom_components/dashboard_assistant` folder from this repository
-   into your Home Assistant `config/custom_components/` directory (create the
-   `custom_components` folder if it doesn't exist).
-2. Restart Home Assistant.
-3. Add the device as described in [step 3](#3-add-the-device) above.
+![dashboard-assistant-configure.png](images/dashboard-assistant-configure.png)
 
 ## Author
 
