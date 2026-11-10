@@ -20,6 +20,22 @@
           # release-please in CI (see .github/workflows/release-please.yml); this
           # is purely to author and validate the commit messages it reads.
           pkgs.commitizen
+
+          # The test suite (`pytest`). Home Assistant's own Python package set,
+          # so `homeassistant` and its pytest plugin are the versions nixpkgs
+          # builds and tests together, rather than whatever pip resolves.
+          # `withPackages` would hand over the stock set, so the packages come
+          # from HA's overridden one instead.
+          (
+            let
+              hassPython = pkgs.home-assistant.python3Packages;
+            in
+            hassPython.python.withPackages (_: [
+              hassPython.pytest
+              hassPython.homeassistant
+              hassPython.pytest-homeassistant-custom-component
+            ])
+          )
         ];
 
         # Point git at the version-controlled hook (.githooks/commit-msg) so every
