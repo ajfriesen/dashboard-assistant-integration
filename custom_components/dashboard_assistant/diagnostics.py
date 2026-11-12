@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import DashboardAssistantConfigEntry
 
-TO_REDACT = {CONF_TOKEN, "serial", "mac"}
+# "password" is the VNC session password in the state snapshot.
+TO_REDACT = {CONF_TOKEN, "serial", "mac", "password"}
 
 
 async def async_get_config_entry_diagnostics(

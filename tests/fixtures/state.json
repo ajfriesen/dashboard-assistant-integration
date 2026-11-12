@@ -189,5 +189,11 @@
     "swapped_in_mib": 18,
     "swapped_out_mib": 250,
     "oom_kills": 0
+  },
+  "vnc": {
+    "on": false,
+    "username": "dashboard",
+    "port": 5900,
+    "timeout": 15
   }
 }

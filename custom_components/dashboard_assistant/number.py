@@ -1,4 +1,4 @@
-"""Browser zoom and screen saver timeout as numbers."""
+"""Browser zoom, screen saver timeout and VNC timeout as numbers."""
 
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ async def async_setup_entry(
     entities: list[NumberEntity] = [ZoomNumber(coordinator)]
     if "screensaver" in coordinator.data:
         entities.append(ScreensaverTimeoutNumber(coordinator))
+    if "vnc" in coordinator.data:
+        entities.append(VncTimeoutNumber(coordinator))
     async_add_entities(entities)
 
 
@@ -78,4 +80,33 @@ class ScreensaverTimeoutNumber(DashboardAssistantEntity, NumberEntity):
         snapshot = await self.coordinator.client.async_set_screensaver(
             timeout=int(value)
         )
+        await self._run_command(snapshot)
+
+
+class VncTimeoutNumber(DashboardAssistantEntity, NumberEntity):
+    """Minutes after which VNC closes by itself; 0 = never.
+
+    Counted from when VNC was switched on. The ceiling mirrors vncMaxTimeout in
+    daemon/vnc.go.
+    """
+
+    _attr_name = "VNC timeout"
+    _attr_icon = "mdi:timer-lock-outline"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 240
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_device_class = NumberDeviceClass.DURATION
+    _attr_mode = NumberMode.BOX
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "vnc_timeout")
+
+    @property
+    def native_value(self) -> float:
+        return float(self.data["vnc"]["timeout"])
+
+    async def async_set_native_value(self, value: float) -> None:
+        snapshot = await self.coordinator.client.async_set_vnc(timeout=int(value))
         await self._run_command(snapshot)
