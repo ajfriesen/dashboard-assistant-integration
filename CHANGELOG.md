@@ -8,6 +8,18 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.2.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0...v1.2.0-rc.1) (2026-11-12)
+
+
+### Features
+
+* add VNC switch and timeout for remote access ([#31](https://github.com/ajfriesen/dashboard-assistant-integration/issues/31)) ([3b317ca](https://github.com/ajfriesen/dashboard-assistant-integration/commit/3b317ca67069a0d6cc26ef5568f7008eef5db82a))
+
+
+### Miscellaneous Chores
+
+* release 1.2.0-rc.1 ([c0bd35e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/c0bd35ef94f987954d019162bff24ca75253909c))
+
 ## [1.1.0](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0-rc.3...v1.1.0) (2026-11-10)
 
 
