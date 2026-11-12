@@ -20,6 +20,7 @@ The tablet appears as a Home Assistant device and can be controlled:
 - Get OS updates via Home Assistant.
 - Take a screenshot from the panel.
 - Use a screen saver.
+- Switch on remote access over VNC, to use the tablet from your computer (e.g. to sign in to Google Calendar). Encrypted, a new password every session, closes itself after a timeout.
 - Last touch sensor, when you want to turn off the tablet after the last touch or go back to a specific screen
 
 ## Installation

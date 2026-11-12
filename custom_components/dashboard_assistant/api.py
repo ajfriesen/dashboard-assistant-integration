@@ -162,6 +162,11 @@ class DashboardAssistantClient:
         self._headers = {"Authorization": f"Bearer {token}"}
 
     @property
+    def host(self) -> str:
+        """The address Home Assistant reaches the device at."""
+        return self._host
+
+    @property
     def events_url(self) -> str:
         """URL of the SSE stream."""
         return f"{self._base}/events"
@@ -250,6 +255,17 @@ class DashboardAssistantClient:
 
     async def async_set_sendspin(self, on: bool) -> dict[str, Any]:
         return await self._request("POST", "/sendspin", {"on": on})
+
+    async def async_set_vnc(
+        self, *, on: bool | None = None, timeout: int | None = None
+    ) -> dict[str, Any]:
+        """Switch VNC on or off, or set its auto-close timeout in minutes (0 = never)."""
+        payload: dict[str, Any] = {}
+        if on is not None:
+            payload["on"] = on
+        if timeout is not None:
+            payload["timeout"] = timeout
+        return await self._request("POST", "/vnc", payload)
 
     async def async_set_screensaver(
         self,

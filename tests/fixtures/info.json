@@ -11,5 +11,6 @@
   "name": "Dashboard Assistant (d7bbb4)",
   "node_id": "da_555d31459f86",
   "serial": "555d31459f86482490091014e2d77c68",
-  "version": "1.0.0-rc.1"
+  "version": "1.0.0-rc.1",
+  "has_vnc": true
 }

@@ -1,7 +1,8 @@
-"""Dark-mode, Sendspin player, and screen saver switches."""
+"""Dark-mode, Sendspin player, screen saver and VNC switches."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -25,6 +26,8 @@ async def async_setup_entry(
     # Older OS builds have no screen saver; create nothing rather than a dead switch.
     if "screensaver" in coordinator.data:
         entities.append(ScreensaverSwitch(coordinator))
+    if "vnc" in coordinator.data:
+        entities.append(VncSwitch(coordinator))
     async_add_entities(entities)
 
 
@@ -104,4 +107,50 @@ class ScreensaverSwitch(DashboardAssistantEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         snapshot = await self.coordinator.client.async_set_screensaver(active=False)
+        await self._run_command(snapshot)
+
+
+class VncSwitch(DashboardAssistantEntity, SwitchEntity):
+    """ON starts a VNC server on the device for remote access to the kiosk.
+
+    The device makes a new password every time this turns on and closes the
+    server by itself after the VNC timeout. The attributes say how to connect.
+    The password is left out of the recorder: it is a secret, and a stored one
+    would outlive its session in the history.
+    """
+
+    _attr_name = "VNC"
+    _attr_icon = "mdi:remote-desktop"
+    _unrecorded_attributes = frozenset({"password"})
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "vnc")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.data["vnc"]["on"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        vnc = self.data["vnc"]
+        if not vnc.get("on"):
+            return None
+        host = self.coordinator.client.host
+        if ":" in host:  # IPv6
+            host = f"[{host}]"
+        attrs: dict[str, Any] = {
+            "address": f"{host}:{vnc['port']}",
+            "username": vnc.get("username"),
+            "password": vnc.get("password"),
+        }
+        if closes_at := vnc.get("closes_at"):
+            attrs["closes_at"] = datetime.fromtimestamp(closes_at, UTC).isoformat()
+        return attrs
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_vnc(on=True)
+        await self._run_command(snapshot)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_vnc(on=False)
         await self._run_command(snapshot)
