@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import zoneinfo
 from typing import Any
 from urllib.parse import urlparse
@@ -37,6 +38,7 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
     DashboardAssistantPairingClosedError,
+    DashboardAssistantRejectedError,
     async_fetch_fingerprint,
     async_identify,
     async_pair,
@@ -244,7 +246,7 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         if entry.state is not ConfigEntryState.LOADED:
             # Everything here comes from the device, so there is nothing to show.
             return self.async_abort(reason="device_unavailable")
-        if "region" not in entry.runtime_data.data:
+        if _region(entry.runtime_data.data) is None:
             return await self.async_step_pages()
         return self.async_show_menu(step_id="init", menu_options=["pages", "region"])
 
@@ -328,51 +330,63 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         language is the browser's, so pages that follow it (Home Assistant's own,
         unless the device's user picked one in their profile) show in it, and the
         on-screen keyboard's layout. A language change restarts the kiosk, so
-        only what the user changed is sent.
+        nothing is sent when the form is saved unchanged.
+
+        Both lists offer the device's own value as it reports it (en-US, not
+        the closest Home Assistant language), so what the user picks is what
+        is sent: there is no mapping to undo.
         """
-        coordinator = self.config_entry.runtime_data
-        device = coordinator.data["region"]
-        shown = {
-            CONF_TIMEZONE: device["timezone"],
-            CONF_LOCALE: _ha_language(device["locale"]),
-        }
+        entry = self.config_entry
+        if entry.state is not ConfigEntryState.LOADED:
+            return self.async_abort(reason="device_unavailable")
+        coordinator = entry.runtime_data
+        device = _region(coordinator.data)
+        if device is None:
+            # The device stopped reporting one since the menu was shown
+            # (rolled back to an older OS, say).
+            return self.async_abort(reason="region_unavailable")
 
         errors: dict[str, str] = {}
+        shown = dict(device)
         if user_input is not None:
             wanted = {
-                "timezone": user_input[CONF_TIMEZONE],
-                # The form shows the device's locale as the closest Home
-                # Assistant language (en-US as en), so leaving it alone must
-                # not send that language back as a change.
-                "locale": device["locale"]
-                if user_input[CONF_LOCALE] == shown[CONF_LOCALE]
-                else user_input[CONF_LOCALE],
+                CONF_TIMEZONE: user_input[CONF_TIMEZONE],
+                CONF_LOCALE: user_input[CONF_LOCALE],
             }
             if wanted == device:
                 return self.async_create_entry(data={})
             try:
                 snapshot = await coordinator.client.async_set_region(
-                    wanted["timezone"], wanted["locale"]
+                    wanted[CONF_TIMEZONE], wanted[CONF_LOCALE]
                 )
+            except DashboardAssistantRejectedError:
+                errors["base"] = "region_rejected"
             except DashboardAssistantError:
                 errors["base"] = "cannot_connect"
             else:
-                coordinator.async_set_updated_data(snapshot)
+                coordinator.apply_snapshot(snapshot)
                 return self.async_create_entry(data={})
-            shown = dict(user_input)
+            shown = wanted
 
         timezones = await self.hass.async_add_executor_job(_timezones)
         return self.async_show_form(
             step_id="region",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_TIMEZONE, default=shown[CONF_TIMEZONE]): SelectSelector(
+                    vol.Required(
+                        CONF_TIMEZONE, default=shown[CONF_TIMEZONE]
+                    ): SelectSelector(
                         SelectSelectorConfig(
-                            options=timezones, mode=SelectSelectorMode.DROPDOWN
+                            options=sorted({*timezones, device[CONF_TIMEZONE]}),
+                            mode=SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Required(CONF_LOCALE, default=shown[CONF_LOCALE]): LanguageSelector(
-                        LanguageSelectorConfig(languages=sorted(LANGUAGES))
+                    vol.Required(
+                        CONF_LOCALE, default=shown[CONF_LOCALE]
+                    ): LanguageSelector(
+                        LanguageSelectorConfig(
+                            languages=sorted({*LANGUAGES, device[CONF_LOCALE]})
+                        )
                     ),
                 }
             ),
@@ -384,24 +398,33 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         )
 
 
+def _region(data: dict[str, Any]) -> dict[str, str] | None:
+    """The device's timezone and locale, or None on an OS without a region.
+
+    Only these two keys: anything else the device adds to its region must not
+    make an unchanged form look changed.
+    """
+    region = data.get("region")
+    if not isinstance(region, dict):
+        return None
+    timezone, locale = region.get("timezone"), region.get("locale")
+    if not timezone or not locale:
+        return None
+    return {CONF_TIMEZONE: timezone, CONF_LOCALE: locale}
+
+
+@functools.cache
 def _timezones() -> list[str]:
-    """Every IANA timezone, sorted. Blocking: it reads the zoneinfo files.
+    """Every IANA timezone, sorted. Blocking the first time: it reads the
+    zoneinfo files; the result is cached, as they do not change at runtime.
 
     Only Area/Location names and UTC: the rest of the database (EST5EDT,
-    Factory, …) are legacy aliases nobody picks for a wall display.
+    Factory, …) are legacy aliases nobody picks for a wall display. A device
+    already on one still gets it offered, so its form can be saved.
     """
     return sorted(
         tz for tz in zoneinfo.available_timezones() if "/" in tz or tz == "UTC"
     )
-
-
-def _ha_language(locale: str) -> str:
-    """The Home Assistant language closest to a device locale: itself, or its
-    language without the region (en-US is en), or English."""
-    if locale in LANGUAGES:
-        return locale
-    language = locale.split("-")[0]
-    return language if language in LANGUAGES else "en"
 
 
 class _PageError(Exception):

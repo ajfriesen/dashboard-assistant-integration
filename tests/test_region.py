@@ -94,8 +94,8 @@ async def test_the_region_form_starts_from_the_device(
     device_info: dict[str, Any],
     region_state: dict[str, Any],
 ) -> None:
-    """The device's en-US is shown as Home Assistant's closest language, and
-    Home Assistant's own settings are named for comparison."""
+    """The device's en-US is shown as it is, and Home Assistant's own settings
+    are named for comparison."""
     await hass.config.async_update(time_zone="Europe/Berlin", language="de")
     entry = await _setup(hass, aioclient_mock, device_info, region_state)
 
@@ -103,7 +103,8 @@ async def test_the_region_form_starts_from_the_device(
 
     assert result["step_id"] == "region"
     assert _default(result, CONF_TIMEZONE) == "UTC"
-    assert _default(result, CONF_LOCALE) == "en"
+    assert _default(result, CONF_LOCALE) == "en-US"
+    assert "en-US" in result["data_schema"].schema[CONF_LOCALE].config["languages"]
     assert result["description_placeholders"] == {
         "ha_timezone": "Europe/Berlin",
         "ha_language": "de",
@@ -119,13 +120,13 @@ async def test_saving_an_unchanged_region_writes_nothing(
     device_info: dict[str, Any],
     region_state: dict[str, Any],
 ) -> None:
-    """Above all, the language shown as en must not go back as a change from
-    en-US: that would restart the kiosk for nothing."""
+    """Above all, an unchanged language must not be sent: that would restart
+    the kiosk for nothing."""
     entry = await _setup(hass, aioclient_mock, device_info, region_state)
 
     result = await _open_region(hass, entry)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "en"}
+        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "en-US"}
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -144,7 +145,7 @@ async def test_a_new_timezone_keeps_the_device_locale(
 
     result = await _open_region(hass, entry)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "en"}
+        result["flow_id"], {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "en-US"}
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -190,3 +191,151 @@ async def test_an_unreachable_device_keeps_the_form_and_the_choice(
     assert result["errors"] == {"base": "cannot_connect"}
     assert _default(result, CONF_TIMEZONE) == "Europe/Berlin"
     assert _default(result, CONF_LOCALE) == "de"
+
+
+async def test_plain_english_can_replace_a_regional_locale(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    _mock_region(aioclient_mock, region_state, {"timezone": "UTC", "locale": "en"})
+
+    result = await _open_region(hass, entry)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "en"}
+    )
+
+    assert _region_writes(aioclient_mock) == [{"timezone": "UTC", "locale": "en"}]
+
+
+async def test_a_retry_sends_the_language_again(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """After a failed save, submitting the same choice again sends it again."""
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    aioclient_mock.post(f"{BASE}/region", status=500)
+    choice = {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "de"}
+
+    result = await _open_region(hass, entry)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], choice)
+    await hass.config_entries.options.async_configure(result["flow_id"], choice)
+
+    assert _region_writes(aioclient_mock) == [
+        {"timezone": "Europe/Berlin", "locale": "de"}
+    ] * 2
+
+
+async def test_a_legacy_timezone_on_the_device_is_offered(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """A device on EST5EDT can still save a language-only change."""
+    region_state["region"] = {"timezone": "EST5EDT", "locale": "en-US"}
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    wanted = {"timezone": "EST5EDT", "locale": "de"}
+    _mock_region(aioclient_mock, region_state, wanted)
+
+    result = await _open_region(hass, entry)
+    assert "EST5EDT" in result["data_schema"].schema[CONF_TIMEZONE].config["options"]
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "EST5EDT", CONF_LOCALE: "de"}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert _region_writes(aioclient_mock) == [wanted]
+
+
+async def test_extra_region_fields_do_not_count_as_a_change(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    region_state["region"] = {**DEVICE_REGION, "keyboard": "us"}
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+
+    result = await _open_region(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "en-US"}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert _region_writes(aioclient_mock) == []
+
+
+async def test_a_refused_region_says_so(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    aioclient_mock.post(f"{BASE}/region", status=400, text="unsupported locale")
+
+    result = await _open_region(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "zh-Hans"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "region_rejected"}
+
+
+async def test_a_partial_answer_does_not_replace_the_state(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    aioclient_mock.post(
+        f"{BASE}/region", json={"ok": True}, headers={"Content-Type": "application/json"}
+    )
+
+    result = await _open_region(hass, entry)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "en-US"}
+    )
+
+    assert "device" in entry.runtime_data.data
+
+
+async def test_a_region_that_disappears_aborts(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """The device rolled back to an OS without a region while the menu was open."""
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    entry.runtime_data.async_set_updated_data(
+        {k: v for k, v in region_state.items() if k != "region"}
+    )
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "region"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "region_unavailable"
+
+
+async def test_a_null_region_goes_straight_to_the_pages(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    entry = await _setup(hass, aioclient_mock, device_info, {**device_state, "region": None})
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["step_id"] == "pages"

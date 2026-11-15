@@ -25,6 +25,10 @@ class DashboardAssistantConnectionError(DashboardAssistantError):
     """The daemon could not be reached."""
 
 
+class DashboardAssistantRejectedError(DashboardAssistantError):
+    """The device understood the request and refused it (HTTP 4xx)."""
+
+
 class DashboardAssistantPairingClosedError(DashboardAssistantError):
     """The device is not currently in pairing mode (HTTP 403)."""
 
@@ -188,7 +192,12 @@ class DashboardAssistantClient:
                     raise DashboardAssistantAuthError("invalid API token")
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise DashboardAssistantError(f"HTTP {resp.status}: {text.strip()}")
+                    error = (
+                        DashboardAssistantRejectedError
+                        if resp.status < 500
+                        else DashboardAssistantError
+                    )
+                    raise error(f"HTTP {resp.status}: {text.strip()}")
                 if resp.content_type == "application/json":
                     return await resp.json()
                 return await resp.read()

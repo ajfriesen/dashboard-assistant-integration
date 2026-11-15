@@ -58,10 +58,12 @@
       "page_has_neither": "“{page}” has no Home Assistant page and no website. Pick one, or remove the page.",
       "invalid_url": "“{page}”: a website needs a full address starting with http:// or https://.",
       "no_ha_url": "“{page}”: Home Assistant has no URL the device can reach. Set one under Settings → System → Network, or add the page as a website.",
-      "cannot_connect": "Could not reach the device. Check it is on and try again."
+      "cannot_connect": "Could not reach the device. Check it is on and try again.",
+      "region_rejected": "The device does not support this time zone or language. Pick another."
     },
     "abort": {
-      "device_unavailable": "The device is not connected, so its pages cannot be shown. Try again once it is back online."
+      "device_unavailable": "The device is not connected, so its pages cannot be shown. Try again once it is back online.",
+      "region_unavailable": "The device no longer reports a time zone and language, so they cannot be changed. Its OS may have been rolled back to an older version."
     }
   },
   "selector": {
