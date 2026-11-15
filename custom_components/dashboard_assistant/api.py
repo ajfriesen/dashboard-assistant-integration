@@ -244,6 +244,16 @@ class DashboardAssistantClient:
         """Replace the device's page list ({"name", "url"} each, in order)."""
         return await self._request("POST", "/pages", {"pages": pages})
 
+    async def async_set_region(self, timezone: str, locale: str) -> dict[str, Any]:
+        """Set the device's timezone (IANA name) and locale (BCP 47 tag).
+
+        A locale change relaunches the kiosk, so the browser and the on-screen
+        keyboard start in it; a timezone change applies without one.
+        """
+        return await self._request(
+            "POST", "/region", {"timezone": timezone, "locale": locale}
+        )
+
     async def async_set_zoom(self, percent: int) -> dict[str, Any]:
         return await self._request("POST", "/zoom", {"percent": percent})
 

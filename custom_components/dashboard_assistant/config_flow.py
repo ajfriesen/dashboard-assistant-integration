@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import zoneinfo
 from typing import Any
 from urllib.parse import urlparse
 
@@ -16,11 +17,16 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.core import callback
+from homeassistant.generated.languages import LANGUAGES
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    LanguageSelector,
+    LanguageSelectorConfig,
     ObjectSelector,
     ObjectSelectorConfig,
     SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
     SelectSelectorMode,
 )
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -37,7 +43,9 @@ from .api import (
 )
 from .const import (
     CONF_CERT_FINGERPRINT,
+    CONF_LOCALE,
     CONF_PAGES,
+    CONF_TIMEZONE,
     DEFAULT_PORT,
     DOMAIN,
 )
@@ -60,7 +68,7 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """The device's pages, the first of which is its home."""
+        """The device's pages and, on a device that has them, its region."""
         return DashboardAssistantOptionsFlow()
 
     def __init__(self) -> None:
@@ -216,18 +224,17 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DashboardAssistantOptionsFlow(OptionsFlow):
-    """Edit the device's pages, the first of which is its home.
+    """Edit the device's preferences: its pages and its region.
 
-    A preference rather than connection data, so it lives here and not in the
-    config flow: pairing stays one click, and the pages can change at any time.
+    Preferences rather than connection data, so they live here and not in the
+    config flow: pairing stays one click, and they can change at any time.
+    Nothing is stored here: the device keeps the one copy of each, so every
+    form starts from what the device reports and saving writes straight back
+    to it.
 
-    Each page is a Home Assistant page, picked from its dashboards and their
-    tabs, or any website. The device starts on the first page and its Home
-    button goes back to it. Nothing is stored here: the device keeps the one
-    copy of its page list, as names and URLs, so the form starts from what the
-    device reports and saving writes the list straight back to it. No reload
-    either: the coordinator's update re-pushes the login if it needs to (see
-    wanted_kiosk_url).
+    A menu picks the form, so each saves on its own: changing the timezone
+    never rewrites the page list. A device too old to have a region reports
+    none, and goes straight to its pages.
     """
 
     async def async_step_init(
@@ -235,12 +242,27 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         entry = self.config_entry
         if entry.state is not ConfigEntryState.LOADED:
-            # The pages come from the device, so there is nothing to show.
+            # Everything here comes from the device, so there is nothing to show.
             return self.async_abort(reason="device_unavailable")
-        coordinator = entry.runtime_data
+        if "region" not in entry.runtime_data.data:
+            return await self.async_step_pages()
+        return self.async_show_menu(step_id="init", menu_options=["pages", "region"])
+
+    async def async_step_pages(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The device's pages, the first of which is its home.
+
+        Each page is a Home Assistant page, picked from its dashboards and
+        their tabs, or any website. The device starts on the first page and its
+        Home button goes back to it. The device keeps its page list as names
+        and URLs. No reload: the coordinator's update re-pushes the login if it
+        needs to (see wanted_kiosk_url).
+        """
+        coordinator = self.config_entry.runtime_data
         base = ha_base_url(self.hass)
         ha_pages = await async_ha_pages(
-            self.hass, await async_kiosk_is_admin(self.hass, entry)
+            self.hass, await async_kiosk_is_admin(self.hass, self.config_entry)
         )
 
         errors: dict[str, str] = {}
@@ -265,7 +287,7 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
             )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="pages",
             data_schema=vol.Schema(
                 {
                     vol.Optional(CONF_PAGES, default=pages): ObjectSelector(
@@ -295,6 +317,91 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
             errors=errors,
             description_placeholders=placeholders,
         )
+
+
+    async def async_step_region(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The device's timezone and language.
+
+        The timezone sets the clock on the screen saver and in every page; the
+        language is the browser's, so pages that follow it (Home Assistant's own,
+        unless the device's user picked one in their profile) show in it, and the
+        on-screen keyboard's layout. A language change restarts the kiosk, so
+        only what the user changed is sent.
+        """
+        coordinator = self.config_entry.runtime_data
+        device = coordinator.data["region"]
+        shown = {
+            CONF_TIMEZONE: device["timezone"],
+            CONF_LOCALE: _ha_language(device["locale"]),
+        }
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            wanted = {
+                "timezone": user_input[CONF_TIMEZONE],
+                # The form shows the device's locale as the closest Home
+                # Assistant language (en-US as en), so leaving it alone must
+                # not send that language back as a change.
+                "locale": device["locale"]
+                if user_input[CONF_LOCALE] == shown[CONF_LOCALE]
+                else user_input[CONF_LOCALE],
+            }
+            if wanted == device:
+                return self.async_create_entry(data={})
+            try:
+                snapshot = await coordinator.client.async_set_region(
+                    wanted["timezone"], wanted["locale"]
+                )
+            except DashboardAssistantError:
+                errors["base"] = "cannot_connect"
+            else:
+                coordinator.async_set_updated_data(snapshot)
+                return self.async_create_entry(data={})
+            shown = dict(user_input)
+
+        timezones = await self.hass.async_add_executor_job(_timezones)
+        return self.async_show_form(
+            step_id="region",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_TIMEZONE, default=shown[CONF_TIMEZONE]): SelectSelector(
+                        SelectSelectorConfig(
+                            options=timezones, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    ),
+                    vol.Required(CONF_LOCALE, default=shown[CONF_LOCALE]): LanguageSelector(
+                        LanguageSelectorConfig(languages=sorted(LANGUAGES))
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "ha_timezone": self.hass.config.time_zone,
+                "ha_language": self.hass.config.language,
+            },
+        )
+
+
+def _timezones() -> list[str]:
+    """Every IANA timezone, sorted. Blocking: it reads the zoneinfo files.
+
+    Only Area/Location names and UTC: the rest of the database (EST5EDT,
+    Factory, …) are legacy aliases nobody picks for a wall display.
+    """
+    return sorted(
+        tz for tz in zoneinfo.available_timezones() if "/" in tz or tz == "UTC"
+    )
+
+
+def _ha_language(locale: str) -> str:
+    """The Home Assistant language closest to a device locale: itself, or its
+    language without the region (en-US is en), or English."""
+    if locale in LANGUAGES:
+        return locale
+    language = locale.split("-")[0]
+    return language if language in LANGUAGES else "en"
 
 
 class _PageError(Exception):

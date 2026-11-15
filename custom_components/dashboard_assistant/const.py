@@ -10,6 +10,10 @@ LOGGER = logging.getLogger(__package__)
 
 DEFAULT_PORT = 8081
 
+# Options flow fields.
+CONF_TIMEZONE = "timezone"
+CONF_LOCALE = "locale"
+
 # mDNS service the device advertises (see modules/core/ha-api.nix).
 ZEROCONF_TYPE = "_dashboard-assistant._tcp.local."
 

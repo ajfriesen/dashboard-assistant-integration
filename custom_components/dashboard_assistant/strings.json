@@ -24,6 +24,13 @@
   "options": {
     "step": {
       "init": {
+        "title": "Configure",
+        "menu_options": {
+          "pages": "Pages",
+          "region": "Time zone and language"
+        }
+      },
+      "pages": {
         "title": "Pages",
         "description": "The pages this device shows. The first page is its home: it starts there, and its Home button goes back to it.",
         "data": {
@@ -31,6 +38,18 @@
         },
         "data_description": {
           "pages": "Each page is a Home Assistant page or any website, in this order. The Page select and the next/previous buttons switch between them. Admin-only dashboards and apps are listed only if the device's user (dashboard-assistant-…) is an administrator, which you can change under Settings → People → Users. The device signs in to Home Assistant only, so other websites are shown signed out."
+        }
+      },
+      "region": {
+        "title": "Time zone and language",
+        "description": "Home Assistant itself uses {ha_timezone} and {ha_language}.",
+        "data": {
+          "timezone": "Time zone",
+          "locale": "Language"
+        },
+        "data_description": {
+          "timezone": "Sets the clock on the screen saver and in every page.",
+          "locale": "The browser's language and the on-screen keyboard's layout. Home Assistant pages follow it, unless the device's user picked a language in their profile. Changing it restarts the dashboard on the device."
         }
       }
     },
