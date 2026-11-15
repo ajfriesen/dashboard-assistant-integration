@@ -6,16 +6,24 @@ name: release-please
 # feat:/fix:/… convention.
 #
 # On every push to main it opens/updates a single "release PR" (titled e.g.
-# "chore(main): release 0.2.0") that bumps CHANGELOG.md and manifest.json. Merging
-# that PR is the release: it creates the vX.Y.Z tag and the GitHub Release, with
-# manifest.json already carrying the matching version (so HACS installs the right
-# one). Nothing to tag or bump by hand.
+# "chore(main): release 1.2.3") that bumps CHANGELOG.md and manifest.json. Merging
+# that PR creates the vX.Y.Z tag and the GitHub Release, with manifest.json
+# already carrying the matching version (so HACS installs the right one). The
+# notes list every commit since the previous release. Nothing to tag or bump by
+# hand.
 #
-# Prereleases: force one with a `Release-As: 0.1.0-rc.1` commit footer. release-
-# please doesn't set the GitHub "pre-release" flag on its own (turning its
-# `prerelease` config on would wrongly flag every pre-1.0 stable release too), so
-# the final step below flags any release whose tag has a SemVer prerelease suffix
-# (a hyphen, e.g. -rc.1/-beta). That keeps it out of HACS for non-beta users.
+# Every release starts as a *candidate*, like the OS: the step below marks it a
+# GitHub pre-release and not latest, so HACS only offers it to users who enabled
+# beta versions. Once it has been tested, promote it:
+#
+#   gh release edit vX.Y.Z --prerelease=false --latest
+#
+# A hyphened version still works by hand for early access, with a
+# `Release-As: 1.3.0-rc.1` commit footer (usually on an empty commit). The final
+# release after such a candidate only lists the commits since the candidate.
+#
+# No paths-ignore here: an empty `Release-As` commit changes no files, so a
+# paths filter would silently swallow it.
 on:
   push:
     branches: [main]
@@ -34,11 +42,24 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # Flag prerelease versions (tag contains a hyphen) as GitHub pre-releases,
-      # and drop them from "latest". Only runs when a release was actually cut.
-      - name: Mark prereleases
-        if: ${{ steps.release.outputs.release_created == 'true' && contains(steps.release.outputs.tag_name, '-') }}
+      # Hold the release back as a candidate: a pre-release, and not "latest".
+      # This applies to *every* tag, not only hyphened ones. Promotion reverses
+      # exactly this.
+      - name: Hold the release back as a candidate
+        if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag_name }}
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+          {
+            echo "### 🚧 $TAG is a candidate"
+            echo
+            echo "It is a GitHub pre-release and not latest, so HACS only offers it"
+            echo "to users with beta versions enabled. Test it, then promote it:"
+            echo
+            echo '```sh'
+            echo "gh release edit $TAG --prerelease=false --latest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
