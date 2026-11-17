@@ -62,7 +62,7 @@
       "region_rejected": "The device does not support this time zone or language. Pick another."
     },
     "abort": {
-      "device_unavailable": "The device is not connected, so its pages cannot be shown. Try again once it is back online.",
+      "device_unavailable": "The device is not connected, so its settings cannot be shown. Try again once it is back online.",
       "region_unavailable": "The device no longer reports a time zone and language, so they cannot be changed. Its OS may have been rolled back to an older version."
     }
   },

@@ -1,9 +1,10 @@
 """The options menu, and its region form: the device's timezone and language.
 
 The device keeps the one copy, so the form starts from what it reports and
-saving writes straight back to it. A language change restarts the kiosk on the
-device, so only what the user changed is sent. A device whose OS has no region
-yet reports none, and its options go straight to its pages.
+saving writes straight back to it, even unchanged: the device restarts the kiosk
+only when the language changes, and an unchanged save is how a timezone it
+failed to apply gets applied again. A device whose OS has no region yet reports
+none, and its options go straight to its pages.
 """
 
 from __future__ import annotations
@@ -114,15 +115,17 @@ async def test_the_region_form_starts_from_the_device(
     assert "EST5EDT" not in timezones
 
 
-async def test_saving_an_unchanged_region_writes_nothing(
+async def test_saving_an_unchanged_region_sends_it_again(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     region_state: dict[str, Any],
 ) -> None:
-    """Above all, an unchanged language must not be sent: that would restart
-    the kiosk for nothing."""
+    """The device may report a timezone it failed to apply (timedated down at
+    boot); saving the form unchanged is how the user repairs it. The device
+    itself skips the kiosk restart when the language is the same."""
     entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    _mock_region(aioclient_mock, region_state, DEVICE_REGION)
 
     result = await _open_region(hass, entry)
     result = await hass.config_entries.options.async_configure(
@@ -130,7 +133,7 @@ async def test_saving_an_unchanged_region_writes_nothing(
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert _region_writes(aioclient_mock) == []
+    assert _region_writes(aioclient_mock) == [DEVICE_REGION]
 
 
 async def test_a_new_timezone_keeps_the_device_locale(
@@ -252,7 +255,7 @@ async def test_a_legacy_timezone_on_the_device_is_offered(
     assert _region_writes(aioclient_mock) == [wanted]
 
 
-async def test_extra_region_fields_do_not_count_as_a_change(
+async def test_extra_region_fields_are_not_sent_back(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
@@ -260,14 +263,14 @@ async def test_extra_region_fields_do_not_count_as_a_change(
 ) -> None:
     region_state["region"] = {**DEVICE_REGION, "keyboard": "us"}
     entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    _mock_region(aioclient_mock, region_state, region_state["region"])
 
     result = await _open_region(hass, entry)
-    result = await hass.config_entries.options.async_configure(
+    await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "en-US"}
     )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert _region_writes(aioclient_mock) == []
+    assert _region_writes(aioclient_mock) == [DEVICE_REGION]
 
 
 async def test_a_refused_region_says_so(
@@ -286,6 +289,44 @@ async def test_a_refused_region_says_so(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "region_rejected"}
+
+
+async def test_a_missing_route_is_not_a_refused_region(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """Only the device's 400 means the choice is wrong; a 404 (a proxy, an OS
+    rolled back) or a 429 must not tell the user to pick another."""
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    aioclient_mock.post(f"{BASE}/region", status=404, text="404 page not found")
+
+    result = await _open_region(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "en-US"}
+    )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_pages_after_the_device_unloads_aborts(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """The entry unloaded (device dropped, reload) while the menu was open."""
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.config_entries.async_unload(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "pages"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "device_unavailable"
 
 
 async def test_a_partial_answer_does_not_replace_the_state(

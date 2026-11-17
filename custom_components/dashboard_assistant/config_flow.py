@@ -261,6 +261,9 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         and URLs. No reload: the coordinator's update re-pushes the login if it
         needs to (see wanted_kiosk_url).
         """
+        if self.config_entry.state is not ConfigEntryState.LOADED:
+            # Unloaded since the menu was shown: runtime_data is gone.
+            return self.async_abort(reason="device_unavailable")
         coordinator = self.config_entry.runtime_data
         base = ha_base_url(self.hass)
         ha_pages = await async_ha_pages(
@@ -320,7 +323,6 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
             description_placeholders=placeholders,
         )
 
-
     async def async_step_region(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -329,8 +331,10 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
         The timezone sets the clock on the screen saver and in every page; the
         language is the browser's, so pages that follow it (Home Assistant's own,
         unless the device's user picked one in their profile) show in it, and the
-        on-screen keyboard's layout. A language change restarts the kiosk, so
-        nothing is sent when the form is saved unchanged.
+        on-screen keyboard's layout. Saving always sends both, even unchanged:
+        the device restarts the kiosk only when the language changes, and
+        re-applies a timezone it failed to set, so an unchanged save is the
+        repair.
 
         Both lists offer the device's own value as it reports it (en-US, not
         the closest Home Assistant language), so what the user picks is what
@@ -353,8 +357,6 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
                 CONF_TIMEZONE: user_input[CONF_TIMEZONE],
                 CONF_LOCALE: user_input[CONF_LOCALE],
             }
-            if wanted == device:
-                return self.async_create_entry(data={})
             try:
                 snapshot = await coordinator.client.async_set_region(
                     wanted[CONF_TIMEZONE], wanted[CONF_LOCALE]
@@ -401,8 +403,8 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
 def _region(data: dict[str, Any]) -> dict[str, str] | None:
     """The device's timezone and locale, or None on an OS without a region.
 
-    Only these two keys: anything else the device adds to its region must not
-    make an unchanged form look changed.
+    Only these two keys: anything else the device adds to its region is not
+    the form's to send back.
     """
     region = data.get("region")
     if not isinstance(region, dict):
@@ -414,15 +416,15 @@ def _region(data: dict[str, Any]) -> dict[str, str] | None:
 
 
 @functools.cache
-def _timezones() -> list[str]:
-    """Every IANA timezone, sorted. Blocking the first time: it reads the
+def _timezones() -> frozenset[str]:
+    """Every IANA timezone. Blocking the first time: it reads the
     zoneinfo files; the result is cached, as they do not change at runtime.
 
     Only Area/Location names and UTC: the rest of the database (EST5EDT,
     Factory, …) are legacy aliases nobody picks for a wall display. A device
     already on one still gets it offered, so its form can be saved.
     """
-    return sorted(
+    return frozenset(
         tz for tz in zoneinfo.available_timezones() if "/" in tz or tz == "UTC"
     )
 

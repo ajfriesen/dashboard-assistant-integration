@@ -26,7 +26,7 @@ class DashboardAssistantConnectionError(DashboardAssistantError):
 
 
 class DashboardAssistantRejectedError(DashboardAssistantError):
-    """The device understood the request and refused it (HTTP 4xx)."""
+    """The device understood the request and refused it (HTTP 400)."""
 
 
 class DashboardAssistantPairingClosedError(DashboardAssistantError):
@@ -192,9 +192,11 @@ class DashboardAssistantClient:
                     raise DashboardAssistantAuthError("invalid API token")
                 if resp.status >= 400:
                     text = await resp.text()
+                    # Only a 400 is the device refusing what was sent; a 404,
+                    # 408 or 429 says nothing about whether the choice is valid.
                     error = (
                         DashboardAssistantRejectedError
-                        if resp.status < 500
+                        if resp.status == 400
                         else DashboardAssistantError
                     )
                     raise error(f"HTTP {resp.status}: {text.strip()}")
