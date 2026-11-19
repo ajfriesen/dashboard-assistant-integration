@@ -17,6 +17,7 @@ The tablet appears as a Home Assistant device and can be controlled:
 - Configure pages you want to show. Not only Home Assistant, just any URL.
   - allows you to show pages at specific times
   - or just cycle through them
+- Set the time zone and language. The on-screen keyboard follows the language (German, French and Swedish layouts).
 - Get OS updates via Home Assistant.
 - Take a screenshot from the panel.
 - Use a screen saver.
@@ -57,6 +58,8 @@ Open the Dashboard Assistant settings:
 [![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/?search=Dashboard+Assistant)
 
 ![dashboard-assistant-configure.png](images/dashboard-assistant-configure.png)
+
+Once the device's OS supports it, **Configure** first asks what to change: **Pages**, or **Time zone and language**.
 
 ## Author
 

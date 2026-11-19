@@ -25,6 +25,10 @@ class DashboardAssistantConnectionError(DashboardAssistantError):
     """The daemon could not be reached."""
 
 
+class DashboardAssistantRejectedError(DashboardAssistantError):
+    """The device understood the request and refused it (HTTP 400)."""
+
+
 class DashboardAssistantPairingClosedError(DashboardAssistantError):
     """The device is not currently in pairing mode (HTTP 403)."""
 
@@ -172,7 +176,11 @@ class DashboardAssistantClient:
         return f"{self._base}/events"
 
     async def _request(
-        self, method: str, path: str, payload: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        timeout: float = 15,
     ) -> Any:
         url = f"{self._base}{path}"
         try:
@@ -181,14 +189,21 @@ class DashboardAssistantClient:
                 url,
                 headers=self._headers,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
                     raise DashboardAssistantAuthError("invalid API token")
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise DashboardAssistantError(f"HTTP {resp.status}: {text.strip()}")
+                    # Only a 400 is the device refusing what was sent; a 404,
+                    # 408 or 429 says nothing about whether the choice is valid.
+                    error = (
+                        DashboardAssistantRejectedError
+                        if resp.status == 400
+                        else DashboardAssistantError
+                    )
+                    raise error(f"HTTP {resp.status}: {text.strip()}")
                 if resp.content_type == "application/json":
                     return await resp.json()
                 return await resp.read()
@@ -196,6 +211,11 @@ class DashboardAssistantClient:
             raise DashboardAssistantCertMismatchError(str(err)) from err
         except aiohttp.ClientError as err:
             raise DashboardAssistantConnectionError(str(err)) from err
+        except TimeoutError as err:
+            # The total timeout raises a bare TimeoutError, not a ClientError.
+            raise DashboardAssistantConnectionError(
+                f"no answer within {timeout:g}s"
+            ) from err
 
     async def async_get_info(self) -> dict[str, Any]:
         """Device identity + capabilities. Also validates the token."""
@@ -243,6 +263,17 @@ class DashboardAssistantClient:
     async def async_set_pages(self, pages: list[dict[str, str]]) -> dict[str, Any]:
         """Replace the device's page list ({"name", "url"} each, in order)."""
         return await self._request("POST", "/pages", {"pages": pages})
+
+    async def async_set_region(self, timezone: str, locale: str) -> dict[str, Any]:
+        """Set the device's timezone (IANA name) and locale (BCP 47 tag).
+
+        A locale change relaunches the kiosk, so the browser and the on-screen
+        keyboard start in it; a timezone change applies without one. The
+        relaunch can delay the answer, hence the longer timeout.
+        """
+        return await self._request(
+            "POST", "/region", {"timezone": timezone, "locale": locale}, timeout=60
+        )
 
     async def async_set_zoom(self, percent: int) -> dict[str, Any]:
         return await self._request("POST", "/zoom", {"percent": percent})
