@@ -421,11 +421,15 @@ def _timezones() -> frozenset[str]:
     zoneinfo files; the result is cached, as they do not change at runtime.
 
     Only Area/Location names and UTC: the rest of the database (EST5EDT,
-    Factory, …) are legacy aliases nobody picks for a wall display. A device
-    already on one still gets it offered, so its form can be saved.
+    Factory, …) are legacy aliases nobody picks for a wall display. Etc/ is
+    left out too: its GMT offsets have the opposite sign (Etc/GMT-5 is UTC+5),
+    an easy wrong pick. A device already on one still gets it offered, so its
+    form can be saved.
     """
     return frozenset(
-        tz for tz in zoneinfo.available_timezones() if "/" in tz or tz == "UTC"
+        tz
+        for tz in zoneinfo.available_timezones()
+        if ("/" in tz and not tz.startswith("Etc/")) or tz == "UTC"
     )
 
 

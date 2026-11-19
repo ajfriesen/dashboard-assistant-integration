@@ -113,6 +113,7 @@ async def test_the_region_form_starts_from_the_device(
     timezones = result["data_schema"].schema[CONF_TIMEZONE].config["options"]
     assert "Europe/Berlin" in timezones and "UTC" in timezones
     assert "EST5EDT" not in timezones
+    assert "Etc/GMT-5" not in timezones
 
 
 async def test_saving_an_unchanged_region_sends_it_again(
@@ -380,3 +381,22 @@ async def test_a_null_region_goes_straight_to_the_pages(
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["step_id"] == "pages"
+
+
+async def test_a_device_that_does_not_answer_keeps_the_form(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    region_state: dict[str, Any],
+) -> None:
+    """A timeout (the kiosk relaunching, say) is a connection error, not a crash."""
+    entry = await _setup(hass, aioclient_mock, device_info, region_state)
+    aioclient_mock.post(f"{BASE}/region", exc=TimeoutError())
+
+    result = await _open_region(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_TIMEZONE: "UTC", CONF_LOCALE: "de"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}

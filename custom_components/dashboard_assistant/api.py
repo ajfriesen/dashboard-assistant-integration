@@ -176,7 +176,11 @@ class DashboardAssistantClient:
         return f"{self._base}/events"
 
     async def _request(
-        self, method: str, path: str, payload: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        timeout: float = 15,
     ) -> Any:
         url = f"{self._base}{path}"
         try:
@@ -185,7 +189,7 @@ class DashboardAssistantClient:
                 url,
                 headers=self._headers,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 ssl=self._ssl,
             ) as resp:
                 if resp.status == 401:
@@ -207,6 +211,11 @@ class DashboardAssistantClient:
             raise DashboardAssistantCertMismatchError(str(err)) from err
         except aiohttp.ClientError as err:
             raise DashboardAssistantConnectionError(str(err)) from err
+        except TimeoutError as err:
+            # The total timeout raises a bare TimeoutError, not a ClientError.
+            raise DashboardAssistantConnectionError(
+                f"no answer within {timeout:g}s"
+            ) from err
 
     async def async_get_info(self) -> dict[str, Any]:
         """Device identity + capabilities. Also validates the token."""
@@ -259,10 +268,11 @@ class DashboardAssistantClient:
         """Set the device's timezone (IANA name) and locale (BCP 47 tag).
 
         A locale change relaunches the kiosk, so the browser and the on-screen
-        keyboard start in it; a timezone change applies without one.
+        keyboard start in it; a timezone change applies without one. The
+        relaunch can delay the answer, hence the longer timeout.
         """
         return await self._request(
-            "POST", "/region", {"timezone": timezone, "locale": locale}
+            "POST", "/region", {"timezone": timezone, "locale": locale}, timeout=60
         )
 
     async def async_set_zoom(self, percent: int) -> dict[str, Any]:
