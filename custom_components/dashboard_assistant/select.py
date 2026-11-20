@@ -1,4 +1,4 @@
-"""Page, display-rotation, screen saver, and OS version selectors."""
+"""Page, display-rotation, audio output, screen saver, and OS version selectors."""
 
 from __future__ import annotations
 
@@ -26,6 +26,9 @@ async def async_setup_entry(
     ]
     if "screensaver" in coordinator.data:
         entities.append(ScreensaverSelect(coordinator))
+    # No audio stack, or an OS build from before the select: create nothing.
+    if "audio" in coordinator.data:
+        entities.append(AudioOutputSelect(coordinator))
     # The version picker only makes sense where the image can apply switches,
     # matching how the update entity gates its Install button. .get chain: a
     # daemon that reports no "update" block must not abort the platform.
@@ -81,6 +84,49 @@ class RotationSelect(DashboardAssistantEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         degrees = int(option.rstrip("°"))
         snapshot = await self.coordinator.client.async_set_rotation(degrees)
+        await self._run_command(snapshot)
+
+
+class AudioOutputSelect(DashboardAssistantEntity, SelectEntity):
+    """Which sound output the device plays to: PipeWire's default sink, so the
+    Sendspin player and sound from the dashboard both move with it.
+
+    The device lists each sink as a node name (what it takes back) and a
+    description (what a person reads). The dropdown shows descriptions; two
+    sinks with the same one get their node name added, so they stay apart.
+    """
+
+    _attr_name = "Audio output"
+    _attr_icon = "mdi:speaker"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "audio_output")
+
+    def _labels(self) -> dict[str, str]:
+        """Label shown in the dropdown, by node name."""
+        sinks = self.data["audio"]["options"]
+        counts: dict[str, int] = {}
+        for sink in sinks:
+            counts[sink["description"]] = counts.get(sink["description"], 0) + 1
+        return {
+            sink["name"]: sink["description"]
+            if counts[sink["description"]] == 1
+            else f"{sink['description']} ({sink['name']})"
+            for sink in sinks
+        }
+
+    @property
+    def options(self) -> list[str]:
+        return list(self._labels().values())
+
+    @property
+    def current_option(self) -> str | None:
+        return self._labels().get(self.data["audio"]["current"])
+
+    async def async_select_option(self, option: str) -> None:
+        name = next(n for n, label in self._labels().items() if label == option)
+        snapshot = await self.coordinator.client.async_set_audio_output(name)
         await self._run_command(snapshot)
 
 

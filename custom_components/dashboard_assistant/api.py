@@ -287,6 +287,10 @@ class DashboardAssistantClient:
     async def async_set_rotation(self, degrees: int) -> dict[str, Any]:
         return await self._request("POST", "/rotation", {"degrees": degrees})
 
+    async def async_set_audio_output(self, output: str) -> dict[str, Any]:
+        """Make one sink (its PipeWire node name) the device's audio output."""
+        return await self._request("POST", "/audio", {"output": output})
+
     async def async_set_sendspin(self, on: bool) -> dict[str, Any]:
         return await self._request("POST", "/sendspin", {"on": on})
 
