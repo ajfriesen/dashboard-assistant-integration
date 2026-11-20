@@ -133,6 +133,19 @@
   "bar": {
     "visible": true
   },
+  "audio": {
+    "current": "alsa_output.platform-hdmi.hdmi-stereo",
+    "options": [
+      {
+        "name": "alsa_output.platform-hdmi.hdmi-stereo",
+        "description": "Built-in Audio HDMI"
+      },
+      {
+        "name": "alsa_output.usb-Generic_USB_Audio-00.analog-stereo",
+        "description": "USB Audio Analog Stereo"
+      }
+    ]
+  },
   "rotation": {
     "current": 0,
     "options": [
