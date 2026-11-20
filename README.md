@@ -14,6 +14,7 @@ The tablet appears as a Home Assistant device and can be controlled:
 - The display is a light. Turn it on/off or dim it.
 - Adjust the zoom
 - Switch between dark and light mode.
+- Hide the button bar at the bottom of the screen, so the dashboard gets the whole screen.
 - Configure pages you want to show. Not only Home Assistant, just any URL.
   - allows you to show pages at specific times
   - or just cycle through them

@@ -119,6 +119,28 @@ async def test_dark_mode_switch_drives_daemon(
     assert last_request_json(aioclient_mock) == {"dark": True}
 
 
+async def test_button_bar_switch_drives_daemon(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
+) -> None:
+    aioclient_mock.post(f"{BASE}/bar", json=device_state, headers={"Content-Type": "application/json"})
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": f"switch.{DEVICE_SLUG}_button_bar"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"visible": False}
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": f"switch.{DEVICE_SLUG}_button_bar"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"visible": True}
+
+
 # --- recovery -----------------------------------------------------------------
 #
 # Recovery runs from Home Assistant, behind the device token: the device serves

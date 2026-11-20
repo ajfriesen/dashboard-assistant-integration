@@ -130,6 +130,9 @@
   "theme": {
     "dark": false
   },
+  "bar": {
+    "visible": true
+  },
   "rotation": {
     "current": 0,
     "options": [
