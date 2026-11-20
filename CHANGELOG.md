@@ -8,6 +8,19 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.2.0](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.2.0-rc.1...v1.2.0) (2026-11-20)
+
+
+### Features
+
+* add a Button bar switch to hide the kiosk's bottom bar ([#35](https://github.com/ajfriesen/dashboard-assistant-integration/issues/35)) ([46b373a](https://github.com/ajfriesen/dashboard-assistant-integration/commit/46b373a8c6caf7e768239985e34acc3db792d74b))
+* set the device's time zone and language from the options ([#33](https://github.com/ajfriesen/dashboard-assistant-integration/issues/33)) ([0a7453e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/0a7453e690a3d65836c036a3bf0dc189ab9405cf))
+
+
+### Miscellaneous
+
+* hold every release as a candidate, drop rc versions ([cfa6c5f](https://github.com/ajfriesen/dashboard-assistant-integration/commit/cfa6c5fec48df2a7bb160acd86fb6c539ad08af2))
+
 ## [1.2.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0...v1.2.0-rc.1) (2026-11-12)
 
 
