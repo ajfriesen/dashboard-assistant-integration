@@ -1,4 +1,4 @@
-"""Dark-mode, Sendspin player, screen saver and VNC switches."""
+"""Dark-mode, button bar, Sendspin player, screen saver and VNC switches."""
 
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ async def async_setup_entry(
         entities.append(ScreensaverSwitch(coordinator))
     if "vnc" in coordinator.data:
         entities.append(VncSwitch(coordinator))
+    if "bar" in coordinator.data:
+        entities.append(ButtonBarSwitch(coordinator))
     async_add_entities(entities)
 
 
@@ -50,6 +52,32 @@ class DarkModeSwitch(DashboardAssistantEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         snapshot = await self.coordinator.client.async_set_theme(False)
+        await self._run_command(snapshot)
+
+
+class ButtonBarSwitch(DashboardAssistantEntity, SwitchEntity):
+    """ON shows the kiosk's bottom button bar, OFF hides it.
+
+    With the bar hidden the dashboard gets the whole screen, but the Home,
+    Prev/Next and Keyboard buttons go with it.
+    """
+
+    _attr_name = "Button bar"
+    _attr_icon = "mdi:dock-bottom"
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "bar")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.data["bar"]["visible"])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_bar(True)
+        await self._run_command(snapshot)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        snapshot = await self.coordinator.client.async_set_bar(False)
         await self._run_command(snapshot)
 
 

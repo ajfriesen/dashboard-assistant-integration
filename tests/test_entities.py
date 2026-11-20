@@ -46,6 +46,10 @@ async def test_conditional_entities_present(
     assert timeout is not None
     assert float(timeout.state) == 10
 
+    bar = hass.states.get(f"switch.{DEVICE_SLUG}_button_bar")
+    assert bar is not None
+    assert bar.state == "on"
+
 
 async def test_core_entities_present(
     hass: HomeAssistant, init_integration: Any, device_state: dict[str, Any]
@@ -82,6 +86,7 @@ async def test_absent_capabilities_create_no_entities(
     state["battery"]["present"] = False
     state.pop("sendspin", None)
     state.pop("screensaver", None)  # an OS build from before screen savers
+    state.pop("bar", None)  # an OS build that cannot hide its bar
 
     await setup_device(hass, aioclient_mock, info, state)
 
@@ -91,6 +96,7 @@ async def test_absent_capabilities_create_no_entities(
     assert hass.states.get(f"switch.{DEVICE_SLUG}_screen_saver") is None
     assert hass.states.get(f"select.{DEVICE_SLUG}_screen_saver_style") is None
     assert hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_timeout") is None
+    assert hass.states.get(f"switch.{DEVICE_SLUG}_button_bar") is None
     # core entities are unaffected
     assert hass.states.get(f"switch.{DEVICE_SLUG}_dark_mode") is not None
 
