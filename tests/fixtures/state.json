@@ -177,7 +177,8 @@
       "clock",
       "logo"
     ],
-    "timeout": 10
+    "timeout": 10,
+    "brightness": 15
   },
   "sendspin": {
     "on": true,
