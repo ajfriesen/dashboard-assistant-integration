@@ -2,6 +2,16 @@
   "config": {
     "flow_title": "{name}",
     "step": {
+      "user": {
+        "title": "Add a device by address",
+        "description": "Dashboard Assistant devices on your network are usually discovered by themselves: look under Discovered in Settings → Devices & services. A device on another network segment, such as a separate VLAN, is not, so enter its address here. It shows on the device’s ⓘ screen. Home Assistant must be able to reach the device on TCP ports 8081 and 8443.",
+        "data": {
+          "host": "Address"
+        },
+        "data_description": {
+          "host": "The device’s IP address or host name, for example 192.168.20.31."
+        }
+      },
       "zeroconf_confirm": {
         "title": "Add {name}",
         "description": "Add {name} to Home Assistant? It pairs by itself, with nothing to type.",
@@ -12,12 +22,12 @@
       "cannot_connect": "Failed to connect",
       "pairing_closed": "This device has already been paired, and removing its Home Assistant entry does not reopen pairing. Reflash the device, then try again; next time, press its Factory reset button before removing it.",
       "cert_mismatch": "This device is presenting a different security certificate than the one Home Assistant recorded when it was added. That is expected if it has been factory-reset. If it has not been, something on your network may be impersonating it.",
-      "invalid_auth": "The device rejected the token it just handed over. Try again."
+      "invalid_auth": "The device rejected the token it just handed over. Try again.",
+      "tls_required": "This device does not offer an encrypted connection, so it cannot pair. Update its OS, then try again."
     },
     "abort": {
       "already_configured": "This device is already configured",
       "cannot_connect": "Couldn't reach the device to identify it — it may still be starting up. It will be rediscovered automatically.",
-      "discovery_only": "Dashboard Assistant devices are added when Home Assistant discovers them: look for the device under Discovered in Settings → Devices & services. A device that is on your network but does not show up is usually blocked from mDNS by the network (for example a separate VLAN).",
       "tls_required": "This device does not offer an encrypted connection, so it cannot pair. Update its OS, then it is discovered again."
     }
   },

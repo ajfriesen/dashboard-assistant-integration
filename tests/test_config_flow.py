@@ -1,4 +1,4 @@
-"""Config flow: a device is added from discovery, and pairs with no token typed."""
+"""Config flow: a device is discovered or added by address, and pairs with no token typed."""
 
 from __future__ import annotations
 
@@ -82,18 +82,102 @@ async def _discover(hass: HomeAssistant) -> dict[str, Any]:
     )
 
 
-async def test_adding_by_hand_points_to_discovery(hass: HomeAssistant) -> None:
-    """A device is only ever added from discovery, which pairs it with no token.
+async def _add_by_address(hass: HomeAssistant, host: str = HOST) -> dict[str, Any]:
+    """Add integration, then type the device's address."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: host}
+    )
 
-    Add integration has nothing to ask for: the token never leaves the device
-    except through pairing, so there is nothing a user could type.
-    """
+
+# --- adding by address --------------------------------------------------------
+#
+# mDNS stays inside one network segment, so a device on another VLAN is never
+# discovered. Add integration asks for its address instead; the token is still
+# fetched by pairing, never typed.
+
+
+async def test_adding_by_hand_asks_for_the_address(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
 
+    assert result["type"] == "form"
+    assert result["step_id"] == "user"
+    assert list(result["data_schema"].schema) == [CONF_HOST]
+
+
+async def test_a_device_added_by_address_pairs_like_a_discovered_one(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    fetch_fingerprint: AsyncMock,
+) -> None:
+    _mock_device(aioclient_mock, device_info)
+
+    result = await _add_by_address(hass, f"  {HOST} ")
+    assert result["type"] == "form"
+    assert result["step_id"] == "zeroconf_confirm"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] == "create_entry"
+    assert result["result"].unique_id == device_info["node_id"]
+    assert result["data"][CONF_HOST] == HOST
+    assert result["data"][CONF_PORT] == PORT
+    assert result["data"][CONF_TOKEN] == "paired-token"
+    assert result["data"][CONF_CERT_FINGERPRINT] == FINGERPRINT
+
+
+async def test_an_unreachable_address_is_reported_on_the_form(
+    hass: HomeAssistant, aioclient_mock: Any
+) -> None:
+    """A typo or a firewall between the VLANs: the user can correct it and retry."""
+    aioclient_mock.get(f"{DISCOVERY_BASE}/identify", exc=aiohttp.ClientError("boom"))
+
+    result = await _add_by_address(hass)
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "user"
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_an_address_without_tls_is_reported_on_the_form(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    fetch_fingerprint: AsyncMock,
+) -> None:
+    _mock_device(aioclient_mock, device_info, tls_port=None)
+
+    result = await _add_by_address(hass)
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "tls_required"}
+
+
+async def test_adding_a_configured_device_by_address_updates_its_address(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    init_integration: Any,
+    fetch_fingerprint: AsyncMock,
+) -> None:
+    """The way to repoint an entry when the device moved to a new address."""
+    new_host = "192.0.2.77"
+    aioclient_mock.get(
+        f"http://{new_host}:{DISCOVERY_PORT}/api/ha/identify",
+        json={"node_id": device_info["node_id"], "tls_port": PORT},
+        headers={"Content-Type": "application/json"},
+    )
+
+    result = await _add_by_address(hass, new_host)
+
     assert result["type"] == "abort"
-    assert result["reason"] == "discovery_only"
+    assert result["reason"] == "already_configured"
+    assert init_integration.data[CONF_HOST] == new_host
 
 
 async def test_discovery_asks_to_confirm_the_device(
