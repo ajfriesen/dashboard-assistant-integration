@@ -317,10 +317,13 @@ class DashboardAssistantClient:
         active: bool | None = None,
         name: str | None = None,
         timeout: int | None = None,
+        brightness: int | None = None,
     ) -> dict[str, Any]:
-        """Start/stop the screen saver, pick which one, or set the idle timeout.
+        """Start/stop the screen saver, pick which one, set the idle timeout or
+        the panel brightness while it shows.
 
-        ``timeout`` is in minutes; 0 disables the idle trigger.
+        ``timeout`` is in minutes; 0 disables the idle trigger. ``brightness``
+        is 0..100; 0 leaves the brightness alone.
         """
         payload: dict[str, Any] = {}
         if active is not None:
@@ -329,6 +332,8 @@ class DashboardAssistantClient:
             payload["name"] = name
         if timeout is not None:
             payload["timeout"] = timeout
+        if brightness is not None:
+            payload["brightness"] = brightness
         return await self._request("POST", "/screensaver", payload)
 
     async def async_power(self, action: str) -> None:

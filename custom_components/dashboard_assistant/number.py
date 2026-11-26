@@ -1,4 +1,4 @@
-"""Browser zoom, screen saver timeout and VNC timeout as numbers."""
+"""Browser zoom, screen saver timeout and brightness, and VNC timeout as numbers."""
 
 from __future__ import annotations
 
@@ -20,11 +20,14 @@ async def async_setup_entry(
     entry: DashboardAssistantConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the zoom and screen saver timeout numbers."""
+    """Set up the zoom and screen saver numbers."""
     coordinator = entry.runtime_data
     entities: list[NumberEntity] = [ZoomNumber(coordinator)]
     if "screensaver" in coordinator.data:
         entities.append(ScreensaverTimeoutNumber(coordinator))
+        # An OS from before the screen saver had its own brightness has no key.
+        if "brightness" in coordinator.data["screensaver"]:
+            entities.append(ScreensaverBrightnessNumber(coordinator))
     if "vnc" in coordinator.data:
         entities.append(VncTimeoutNumber(coordinator))
     async_add_entities(entities)
@@ -79,6 +82,36 @@ class ScreensaverTimeoutNumber(DashboardAssistantEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         snapshot = await self.coordinator.client.async_set_screensaver(
             timeout=int(value)
+        )
+        await self._run_command(snapshot)
+
+
+class ScreensaverBrightnessNumber(DashboardAssistantEntity, NumberEntity):
+    """Panel brightness while the screen saver shows; 0 = leave it alone.
+
+    The device dims to it when the screen saver starts and returns to the
+    Display light's brightness when it ends.
+    """
+
+    _attr_name = "Screen saver brightness"
+    _attr_icon = "mdi:brightness-4"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "%"
+    _attr_mode = NumberMode.SLIDER
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "screensaver_brightness")
+
+    @property
+    def native_value(self) -> float:
+        return float(self.data["screensaver"]["brightness"])
+
+    async def async_set_native_value(self, value: float) -> None:
+        snapshot = await self.coordinator.client.async_set_screensaver(
+            brightness=int(value)
         )
         await self._run_command(snapshot)
 

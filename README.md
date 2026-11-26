@@ -21,7 +21,7 @@ The tablet appears as a Home Assistant device and can be controlled:
 - Set the time zone and language. The on-screen keyboard follows the language (German, French and Swedish layouts).
 - Get OS updates via Home Assistant.
 - Take a screenshot from the panel.
-- Use a screen saver.
+- Use a screen saver, with its own brightness.
 - Pick the audio output (HDMI, headphone jack, a USB speaker) for music and dashboard sound, and the audio input (a USB microphone) for a voice assistant.
 - Switch on remote access over VNC, to use the tablet from your computer (e.g. to sign in to Google Calendar). Encrypted, a new password every session, closes itself after a timeout.
 - Last touch sensor, when you want to turn off the tablet after the last touch or go back to a specific screen

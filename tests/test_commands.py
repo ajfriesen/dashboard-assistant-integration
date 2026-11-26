@@ -87,6 +87,14 @@ async def test_screensaver_entities_drive_daemon(
     )
     assert last_request_json(aioclient_mock) == {"timeout": 0}
 
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": f"number.{DEVICE_SLUG}_screen_saver_brightness", "value": 20},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"brightness": 20}
+
 
 async def test_display_light_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
