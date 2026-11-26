@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -283,3 +284,79 @@ async def test_factory_reset_removes_the_entry(
     await hass.async_block_till_done()
 
     assert hass.config_entries.async_get_entry(init_integration.entry_id) is None
+
+
+async def _setup_with_charge(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> dict[str, Any]:
+    state = copy.deepcopy(device_state)
+    state["battery"] = {
+        "present": True,
+        "level": 77,
+        "charging": False,
+        "charge_start": 40,
+        "charge_end": 80,
+    }
+    await setup_device(hass, aioclient_mock, device_info, state)
+    return state
+
+
+async def test_charge_numbers_drive_daemon(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    state = await _setup_with_charge(hass, aioclient_mock, device_info, device_state)
+    # The device answers with what the battery accepted, which a driver may
+    # have adjusted (Dell raises a start of 20 to 50).
+    accepted = copy.deepcopy(state)
+    accepted["battery"]["charge_start"] = 50
+    aioclient_mock.post(
+        f"{BASE}/battery",
+        json=accepted,
+        headers={"Content-Type": "application/json"},
+    )
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": f"number.{DEVICE_SLUG}_charge_start", "value": 20},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"charge_start": 20}
+    assert float(hass.states.get(f"number.{DEVICE_SLUG}_charge_start").state) == 50
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": f"number.{DEVICE_SLUG}_charge_stop", "value": 90},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {"charge_end": 90}
+
+
+async def test_a_start_not_below_the_stop_is_refused_with_a_reason(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    await _setup_with_charge(hass, aioclient_mock, device_info, device_state)
+    aioclient_mock.post(
+        f"{BASE}/battery",
+        status=400,
+        text='{"error":"charging has to start below where it stops"}',
+    )
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": f"number.{DEVICE_SLUG}_charge_start", "value": 90},
+            blocking=True,
+        )
+    assert err.value.translation_key == "charge_rejected"

@@ -97,6 +97,9 @@
   "exceptions": {
     "no_earlier_generation": {
       "message": "This device has only one system generation, so there is nothing to roll back to."
+    },
+    "charge_rejected": {
+      "message": "The device refused this charge threshold. Charging has to start below where it stops, so set Charge stop first when raising both. ({reason})"
     }
   }
 }

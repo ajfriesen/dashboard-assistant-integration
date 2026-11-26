@@ -284,6 +284,19 @@ class DashboardAssistantClient:
     async def async_set_bar(self, visible: bool) -> dict[str, Any]:
         return await self._request("POST", "/bar", {"visible": visible})
 
+    async def async_set_battery(
+        self, *, charge_start: int | None = None, charge_end: int | None = None
+    ) -> dict[str, Any]:
+        """Set the battery's charge thresholds in percent: charging begins
+        below the start and stops at the end. The snapshot it answers with
+        carries what the battery accepted, which a driver may have adjusted."""
+        body = {
+            k: v
+            for k, v in {"charge_start": charge_start, "charge_end": charge_end}.items()
+            if v is not None
+        }
+        return await self._request("POST", "/battery", body)
+
     async def async_set_rotation(self, degrees: int) -> dict[str, Any]:
         return await self._request("POST", "/rotation", {"degrees": degrees})
 

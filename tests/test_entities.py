@@ -307,3 +307,49 @@ async def test_os_without_screen_saver_brightness(
 
     assert hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_timeout") is not None
     assert hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_brightness") is None
+
+
+def _with_charge(device_state: dict[str, Any], **thresholds: int) -> dict[str, Any]:
+    state = copy.deepcopy(device_state)
+    state["battery"] = {"present": True, "level": 77, "charging": False, **thresholds}
+    return state
+
+
+async def test_charge_numbers_show_what_the_battery_holds(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    state = _with_charge(device_state, charge_start=40, charge_end=80)
+
+    await setup_device(hass, aioclient_mock, device_info, state)
+
+    start = hass.states.get(f"number.{DEVICE_SLUG}_charge_start")
+    stop = hass.states.get(f"number.{DEVICE_SLUG}_charge_stop")
+    assert start is not None and float(start.state) == 40
+    assert stop is not None and float(stop.state) == 80
+    assert stop.attributes["min"] == 0 and stop.attributes["max"] == 100
+
+
+async def test_a_battery_with_only_a_stop_threshold_gets_only_charge_stop(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """asus-wmi has an end threshold only."""
+    state = _with_charge(device_state, charge_end=100)
+
+    await setup_device(hass, aioclient_mock, device_info, state)
+
+    assert hass.states.get(f"number.{DEVICE_SLUG}_charge_start") is None
+    assert hass.states.get(f"number.{DEVICE_SLUG}_charge_stop") is not None
+
+
+async def test_no_charge_numbers_without_thresholds(
+    hass: HomeAssistant, init_integration: Any
+) -> None:
+    """A Pi, a mini-PC, or an OS from before the thresholds."""
+    assert hass.states.get(f"number.{DEVICE_SLUG}_charge_start") is None
+    assert hass.states.get(f"number.{DEVICE_SLUG}_charge_stop") is None
