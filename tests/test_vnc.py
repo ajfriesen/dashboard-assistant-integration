@@ -86,12 +86,18 @@ async def test_no_vnc_entities_on_builds_without_it(
 async def test_vnc_entities_drive_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/vnc", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/vnc", json=device_state, headers={"Content-Type": "application/json"}
+    )
 
-    await hass.services.async_call("switch", "turn_on", {"entity_id": SWITCH}, blocking=True)
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": SWITCH}, blocking=True
+    )
     assert last_request_json(aioclient_mock) == {"on": True}
 
-    await hass.services.async_call("switch", "turn_off", {"entity_id": SWITCH}, blocking=True)
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": SWITCH}, blocking=True
+    )
     assert last_request_json(aioclient_mock) == {"on": False}
 
     await hass.services.async_call(

@@ -28,7 +28,9 @@ from .conftest import (
     TOKEN,
 )
 
-FETCH_FINGERPRINT = "custom_components.dashboard_assistant.config_flow.async_fetch_fingerprint"
+FETCH_FINGERPRINT = (
+    "custom_components.dashboard_assistant.config_flow.async_fetch_fingerprint"
+)
 
 
 @pytest.fixture

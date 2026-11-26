@@ -72,7 +72,10 @@ async def dashboards(hass: HomeAssistant) -> None:
             None: _dashboard(
                 None,
                 "Overview",
-                views=[{"title": "Home", "path": "home"}, {"title": "Energy", "path": "energy"}],
+                views=[
+                    {"title": "Home", "path": "home"},
+                    {"title": "Energy", "path": "energy"},
+                ],
             ),
             "dashboard-kitchen": _dashboard(
                 "dashboard-kitchen",
@@ -88,7 +91,13 @@ async def dashboards(hass: HomeAssistant) -> None:
     await hass.config.async_update(internal_url=HA_URL)
 
 
-def _panel(url_path: str, title: str, config: dict[str, Any] | None, *, require_admin: bool = False) -> Any:
+def _panel(
+    url_path: str,
+    title: str,
+    config: dict[str, Any] | None,
+    *,
+    require_admin: bool = False,
+) -> Any:
     """A sidebar panel as the frontend keeps it."""
     return SimpleNamespace(
         frontend_url_path=url_path,
@@ -105,12 +114,19 @@ def apps(hass: HomeAssistant) -> None:
     hass.data.setdefault(DATA_PANELS, {}).update(
         {
             "d5369777_music_assistant": _panel(
-                "d5369777_music_assistant", "Music Assistant", {"addon": "d5369777_music_assistant"}
+                "d5369777_music_assistant",
+                "Music Assistant",
+                {"addon": "d5369777_music_assistant"},
             ),
             "a0d7b954_vscode": _panel(
-                "a0d7b954_vscode", "Studio Code Server", {"addon": "a0d7b954_vscode"}, require_admin=True
+                "a0d7b954_vscode",
+                "Studio Code Server",
+                {"addon": "a0d7b954_vscode"},
+                require_admin=True,
             ),
-            "ccab4aaf_frigate": _panel("ccab4aaf_frigate", "Frigate", {"ingress": "ccab4aaf_frigate"}),
+            "ccab4aaf_frigate": _panel(
+                "ccab4aaf_frigate", "Frigate", {"ingress": "ccab4aaf_frigate"}
+            ),
             "energy": _panel("energy", "Energy", None),
         }
     )
@@ -149,7 +165,9 @@ async def _setup(
     # The first user Home Assistant creates is its owner, and so an admin; a
     # real one always has its owner already.
     await hass.auth.async_create_user("Owner")
-    user = await hass.auth.async_create_user("Dashboard Assistant", group_ids=[kiosk_group])
+    user = await hass.auth.async_create_user(
+        "Dashboard Assistant", group_ids=[kiosk_group]
+    )
     mock_daemon(aioclient_mock, device_info, device_state)
     aioclient_mock.post(
         f"{BASE}/kiosk_login",
@@ -245,9 +263,11 @@ async def test_apps_the_kiosk_can_open_are_listed_after_the_dashboards(
     entry = await _setup(hass, aioclient_mock, device_info, device_state)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    options = result["data_schema"].schema[CONF_PAGES].config["fields"]["ha_page"][
-        "selector"
-    ]["select"]["options"]
+    options = (
+        result["data_schema"]
+        .schema[CONF_PAGES]
+        .config["fields"]["ha_page"]["selector"]["select"]["options"]
+    )
     assert [(o["value"], o["label"]) for o in options][-2:] == [
         ("ccab4aaf_frigate", "Frigate"),
         ("d5369777_music_assistant", "Music Assistant"),
@@ -280,9 +300,9 @@ async def test_an_admin_kiosk_user_is_offered_admin_only_dashboards_and_apps(
 
     values = [
         o["value"]
-        for o in result["data_schema"].schema[CONF_PAGES].config["fields"]["ha_page"][
-            "selector"
-        ]["select"]["options"]
+        for o in result["data_schema"]
+        .schema[CONF_PAGES]
+        .config["fields"]["ha_page"]["selector"]["select"]["options"]
     ]
     assert {"dashboard-admin", "dashboard-admin/x", "a0d7b954_vscode"} <= set(values)
     assert "energy" not in values

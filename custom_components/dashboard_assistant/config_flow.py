@@ -87,9 +87,7 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return (info, error_code)."""
         assert self._fingerprint is not None
         session = async_get_clientsession(self.hass)
-        client = DashboardAssistantClient(
-            session, host, port, token, self._fingerprint
-        )
+        client = DashboardAssistantClient(session, host, port, token, self._fingerprint)
         try:
             info = await client.async_get_info()
         except DashboardAssistantAuthError:
@@ -116,7 +114,9 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle a device discovered over mDNS."""
         self._host = discovery_info.host
         self._port = discovery_info.port or DEFAULT_PORT
-        self._name = discovery_info.name.removesuffix("._dashboard-assistant._tcp.local.")
+        self._name = discovery_info.name.removesuffix(
+            "._dashboard-assistant._tcp.local."
+        )
 
         # Identify the device to key discovery on its stable node id — so every
         # address it's announced at (IPv4/IPv6/…) and any later DHCP change map to
@@ -303,7 +303,9 @@ class DashboardAssistantOptionsFlow(OptionsFlow):
                                     "selector": {
                                         "select": {
                                             "options": [
-                                                SelectOptionDict(value=value, label=label)
+                                                SelectOptionDict(
+                                                    value=value, label=label
+                                                )
                                                 for value, label in ha_pages
                                             ],
                                             "mode": SelectSelectorMode.DROPDOWN,
@@ -485,7 +487,12 @@ def _to_device(
         if ha_page:
             if base is None:
                 raise _PageError("no_ha_url", shown)
-            out.append({"name": name or labels.get(ha_page, ha_page), "url": ha_page_url(base, ha_page)})
+            out.append(
+                {
+                    "name": name or labels.get(ha_page, ha_page),
+                    "url": ha_page_url(base, ha_page),
+                }
+            )
             continue
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:

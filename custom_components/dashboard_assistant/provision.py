@@ -83,9 +83,7 @@ async def async_provision_kiosk_login(
     if user is None:
         # async_create_user makes the user active on its own — it takes no
         # is_active kwarg (passing one raises TypeError).
-        user = await hass.auth.async_create_user(
-            user_name, group_ids=[GROUP_ID_USER]
-        )
+        user = await hass.auth.async_create_user(user_name, group_ids=[GROUP_ID_USER])
     elif user.name != user_name:
         await hass.auth.async_update_user(user, name=user_name)
     await _async_ensure_username(hass, user, _kiosk_username(mac_short))
@@ -165,7 +163,9 @@ async def async_ensure_kiosk_username(
         await _async_ensure_username(hass, user, _kiosk_username(_mac_short(info)))
 
 
-async def _async_ensure_username(hass: HomeAssistant, user: User, username: str) -> None:
+async def _async_ensure_username(
+    hass: HomeAssistant, user: User, username: str
+) -> None:
     """Give the kiosk user a username/password login if it has none.
 
     Nobody signs in with it: the kiosk uses its token. It exists because add-ons
@@ -184,7 +184,11 @@ async def _async_ensure_username(hass: HomeAssistant, user: User, username: str)
     # An install can configure the username/password provider away (only
     # trusted_networks, say). The kiosk's token works regardless.
     provider = next(
-        (p for p in hass.auth.auth_providers if isinstance(p, auth_ha.HassAuthProvider)),
+        (
+            p
+            for p in hass.auth.auth_providers
+            if isinstance(p, auth_ha.HassAuthProvider)
+        ),
         None,
     )
     if provider is None:
@@ -223,7 +227,9 @@ def ha_base_url(hass: HomeAssistant) -> str | None:
     back to whatever Home Assistant can resolve.
     """
     try:
-        return get_url(hass, allow_internal=True, allow_external=True, prefer_external=False)
+        return get_url(
+            hass, allow_internal=True, allow_external=True, prefer_external=False
+        )
     except NoURLAvailableError:
         return None
 
@@ -241,7 +247,11 @@ def wanted_kiosk_url(
     """
     base = ha_base_url(hass)
     coordinator = getattr(entry, "runtime_data", None)
-    if base is None or coordinator is None or coordinator.info.get("home_is_first_page"):
+    if (
+        base is None
+        or coordinator is None
+        or coordinator.info.get("home_is_first_page")
+    ):
         return base
     pages = (coordinator.data or {}).get("page", {}).get("list") or []
     if pages and same_origin(pages[0]["url"], base):
@@ -395,7 +405,10 @@ def ha_page_value(base: str, url: str, values: list[str]) -> str | None:
     root = base.rstrip("/")
     if url.rstrip("/") == root:
         return HA_DEFAULT_PAGE
-    if url.startswith(root + "/") and (path := url[len(root) + 1 :].strip("/")) in values:
+    if (
+        url.startswith(root + "/")
+        and (path := url[len(root) + 1 :].strip("/")) in values
+    ):
         return path
     return None
 
@@ -420,12 +433,16 @@ async def async_apply_legacy_home(
         return
     admin = await async_kiosk_is_admin(hass, entry)
     url, name = await _legacy_home_page(hass, base, legacy, admin)
-    pages = [{"name": p["name"], "url": p["url"]} for p in coordinator.data["page"]["list"]]
+    pages = [
+        {"name": p["name"], "url": p["url"]} for p in coordinator.data["page"]["list"]
+    ]
     first = pages[0]["url"].rstrip("/") if pages else None
     if first != url.rstrip("/"):
         if first == _STOCK_FIRST_PAGE:
             pages = pages[1:]
-        snapshot = await coordinator.client.async_set_pages([{"name": name, "url": url}, *pages])
+        snapshot = await coordinator.client.async_set_pages(
+            [{"name": name, "url": url}, *pages]
+        )
         coordinator.async_set_updated_data(snapshot)
     hass.config_entries.async_update_entry(
         entry, data={k: v for k, v in entry.data.items() if k != CONF_LEGACY_HOME}
@@ -443,6 +460,8 @@ async def _legacy_home_page(
     labels = dict(await async_ha_pages(hass, admin))
     path = legacy.strip("/")
     first = path.split("/", 1)[0]
-    if legacy == HA_DEFAULT_PAGE or ("-" in first and first not in kiosk_dashboards(hass, admin)):
+    if legacy == HA_DEFAULT_PAGE or (
+        "-" in first and first not in kiosk_dashboards(hass, admin)
+    ):
         return base, "Home Assistant"
     return ha_page_url(base, path), labels.get(path, path)

@@ -292,7 +292,9 @@ class DashboardAssistantClient:
     ) -> dict[str, Any]:
         """Make a sink the device's audio output and/or a source its audio
         input, each by its PipeWire node name."""
-        body = {k: v for k, v in {"output": output, "input": input}.items() if v is not None}
+        body = {
+            k: v for k, v in {"output": output, "input": input}.items() if v is not None
+        }
         return await self._request("POST", "/audio", body)
 
     async def async_set_sendspin(self, on: bool) -> dict[str, Any]:
