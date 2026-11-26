@@ -21,6 +21,10 @@
           # is purely to author and validate the commit messages it reads.
           pkgs.commitizen
 
+          # Lint and format (`ruff check`, `ruff format`); config in ruff.toml.
+          # CI pins the same version in .github/workflows/test.yml.
+          pkgs.ruff
+
           # The test suite (`pytest`). Home Assistant's own Python package set,
           # so `homeassistant` and its pytest plugin are the versions nixpkgs
           # builds and tests together, rather than whatever pip resolves.

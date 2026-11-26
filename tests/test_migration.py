@@ -87,7 +87,10 @@ async def _migrate(
             2,
             {"home": "dashboard-kitchen/lights"},
             [GRAFANA],
-            [{"name": "Kitchen › Lights", "url": f"{HA}/dashboard-kitchen/lights"}, GRAFANA],
+            [
+                {"name": "Kitchen › Lights", "url": f"{HA}/dashboard-kitchen/lights"},
+                GRAFANA,
+            ],
         ),
         (
             2,
@@ -110,7 +113,12 @@ async def test_the_old_home_becomes_the_first_page(
 ) -> None:
     """So updating changes neither where the device starts nor where Home goes."""
     entry = await _migrate(
-        hass, aioclient_mock, device_info, _with_pages(device_state, pages), minor_version, options
+        hass,
+        aioclient_mock,
+        device_info,
+        _with_pages(device_state, pages),
+        minor_version,
+        options,
     )
 
     assert _page_writes(aioclient_mock) == [written]
@@ -126,9 +134,13 @@ async def test_a_home_already_first_is_left_alone(
     device_state: dict[str, Any],
     dashboards: None,  # noqa: F811
 ) -> None:
-    state = _with_pages(device_state, [{"name": "Home Assistant", "url": f"{HA}/"}, TODO])
+    state = _with_pages(
+        device_state, [{"name": "Home Assistant", "url": f"{HA}/"}, TODO]
+    )
 
-    entry = await _migrate(hass, aioclient_mock, device_info, state, 1, {"dashboard": "default"})
+    entry = await _migrate(
+        hass, aioclient_mock, device_info, state, 1, {"dashboard": "default"}
+    )
 
     assert _page_writes(aioclient_mock) == []
     assert "legacy_home" not in entry.data

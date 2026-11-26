@@ -23,7 +23,11 @@ def last_request_json(aioclient_mock: Any) -> dict[str, Any]:
 async def test_sendspin_switch_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/sendspin", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/sendspin",
+        json=device_state,
+        headers={"Content-Type": "application/json"},
+    )
 
     await hass.services.async_call(
         "switch",
@@ -45,7 +49,11 @@ async def test_sendspin_switch_drives_daemon(
 async def test_screensaver_entities_drive_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/screensaver", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/screensaver",
+        json=device_state,
+        headers={"Content-Type": "application/json"},
+    )
 
     await hass.services.async_call(
         "switch",
@@ -83,7 +91,11 @@ async def test_screensaver_entities_drive_daemon(
 async def test_display_light_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/display", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/display",
+        json=device_state,
+        headers={"Content-Type": "application/json"},
+    )
 
     await hass.services.async_call(
         "light",
@@ -109,12 +121,17 @@ async def test_audio_output_select_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
     """The select shows descriptions and sends the sink's node name."""
-    aioclient_mock.post(f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"}
+    )
 
     await hass.services.async_call(
         "select",
         "select_option",
-        {"entity_id": f"select.{DEVICE_SLUG}_audio_output", "option": "USB Audio Analog Stereo"},
+        {
+            "entity_id": f"select.{DEVICE_SLUG}_audio_output",
+            "option": "USB Audio Analog Stereo",
+        },
         blocking=True,
     )
     assert last_request_json(aioclient_mock) == {
@@ -126,12 +143,17 @@ async def test_audio_input_select_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
     """The input select sends the source's node name as "input"."""
-    aioclient_mock.post(f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"}
+    )
 
     await hass.services.async_call(
         "select",
         "select_option",
-        {"entity_id": f"select.{DEVICE_SLUG}_audio_input", "option": "ReSpeaker 4 Mic Array"},
+        {
+            "entity_id": f"select.{DEVICE_SLUG}_audio_input",
+            "option": "ReSpeaker 4 Mic Array",
+        },
         blocking=True,
     )
     assert last_request_json(aioclient_mock) == {
@@ -142,7 +164,9 @@ async def test_audio_input_select_drives_daemon(
 async def test_dark_mode_switch_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/theme", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/theme", json=device_state, headers={"Content-Type": "application/json"}
+    )
 
     await hass.services.async_call(
         "switch",
@@ -156,7 +180,9 @@ async def test_dark_mode_switch_drives_daemon(
 async def test_button_bar_switch_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:
-    aioclient_mock.post(f"{BASE}/bar", json=device_state, headers={"Content-Type": "application/json"})
+    aioclient_mock.post(
+        f"{BASE}/bar", json=device_state, headers={"Content-Type": "application/json"}
+    )
 
     await hass.services.async_call(
         "switch",

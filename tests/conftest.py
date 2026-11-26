@@ -73,8 +73,12 @@ def mock_daemon(
     cleanly (auth errors end the loop; anything else would retry forever and
     leave a lingering background task in the test).
     """
-    aioclient_mock.get(f"{BASE}/info", json=info, headers={"Content-Type": "application/json"})
-    aioclient_mock.get(f"{BASE}/state", json=state, headers={"Content-Type": "application/json"})
+    aioclient_mock.get(
+        f"{BASE}/info", json=info, headers={"Content-Type": "application/json"}
+    )
+    aioclient_mock.get(
+        f"{BASE}/state", json=state, headers={"Content-Type": "application/json"}
+    )
     aioclient_mock.get(f"{BASE}/events", status=401)
 
 

@@ -225,7 +225,8 @@ async def async_setup_entry(
     ).get("present"):
         descriptions.append(TEMPERATURE_SENSOR)
     async_add_entities(
-        DashboardAssistantSensor(coordinator, description) for description in descriptions
+        DashboardAssistantSensor(coordinator, description)
+        for description in descriptions
     )
 
 

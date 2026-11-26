@@ -38,7 +38,9 @@ def _region_writes(aioclient_mock: Any) -> list[dict[str, str]]:
     ]
 
 
-def _mock_region(aioclient_mock: Any, state: dict[str, Any], region: dict[str, str]) -> None:
+def _mock_region(
+    aioclient_mock: Any, state: dict[str, Any], region: dict[str, str]
+) -> None:
     aioclient_mock.post(
         f"{BASE}/region",
         json={**state, "region": region},
@@ -226,12 +228,15 @@ async def test_a_retry_sends_the_language_again(
     choice = {CONF_TIMEZONE: "Europe/Berlin", CONF_LOCALE: "de"}
 
     result = await _open_region(hass, entry)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], choice)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], choice
+    )
     await hass.config_entries.options.async_configure(result["flow_id"], choice)
 
-    assert _region_writes(aioclient_mock) == [
-        {"timezone": "Europe/Berlin", "locale": "de"}
-    ] * 2
+    assert (
+        _region_writes(aioclient_mock)
+        == [{"timezone": "Europe/Berlin", "locale": "de"}] * 2
+    )
 
 
 async def test_a_legacy_timezone_on_the_device_is_offered(
@@ -338,7 +343,9 @@ async def test_a_partial_answer_does_not_replace_the_state(
 ) -> None:
     entry = await _setup(hass, aioclient_mock, device_info, region_state)
     aioclient_mock.post(
-        f"{BASE}/region", json={"ok": True}, headers={"Content-Type": "application/json"}
+        f"{BASE}/region",
+        json={"ok": True},
+        headers={"Content-Type": "application/json"},
     )
 
     result = await _open_region(hass, entry)
@@ -376,7 +383,9 @@ async def test_a_null_region_goes_straight_to_the_pages(
     device_info: dict[str, Any],
     device_state: dict[str, Any],
 ) -> None:
-    entry = await _setup(hass, aioclient_mock, device_info, {**device_state, "region": None})
+    entry = await _setup(
+        hass, aioclient_mock, device_info, {**device_state, "region": None}
+    )
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 

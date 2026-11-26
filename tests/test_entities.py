@@ -49,7 +49,10 @@ async def test_conditional_entities_present(
     audio = hass.states.get(f"select.{DEVICE_SLUG}_audio_output")
     assert audio is not None
     assert audio.state == "Built-in Audio HDMI"
-    assert audio.attributes["options"] == ["Built-in Audio HDMI", "USB Audio Analog Stereo"]
+    assert audio.attributes["options"] == [
+        "Built-in Audio HDMI",
+        "USB Audio Analog Stereo",
+    ]
 
     mic = hass.states.get(f"select.{DEVICE_SLUG}_audio_input")
     assert mic is not None
