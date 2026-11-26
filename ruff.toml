@@ -1,0 +1,4 @@
+# Ruff lints and formats the integration: `ruff check` and `ruff format`, both
+# from the dev shell. CI runs them at the same version (.github/workflows/test.yml);
+# bump the two together with the nixpkgs pin.
+target-version = "py313"

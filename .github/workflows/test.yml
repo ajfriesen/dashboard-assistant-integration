@@ -1,5 +1,5 @@
-# Run the pytest suite (pytest-homeassistant-custom-component) on every push
-# and PR. The fixtures in tests/fixtures are real daemon payloads, so this
+# Run the pytest suite (pytest-homeassistant-custom-component) and ruff on every
+# push and PR. The fixtures in tests/fixtures are real daemon payloads, so this
 # catches entity-gating regressions against the shapes devices actually serve.
 name: test
 
@@ -19,3 +19,18 @@ jobs:
           cache: pip
       - run: pip install -r tests/requirements.txt
       - run: pytest -q
+
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The version the dev shell's nixpkgs pin ships (flake.lock), so a file
+      # ruff accepts locally is one CI accepts.
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.15.14"
+          args: check
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.15.14"
+          args: format --check
