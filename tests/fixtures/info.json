@@ -1,4 +1,5 @@
 {
+  "can_reload": true,
   "has_battery": false,
   "has_btrfs": true,
   "has_sendspin": true,
