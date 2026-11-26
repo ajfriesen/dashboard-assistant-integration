@@ -51,6 +51,11 @@ async def test_conditional_entities_present(
     assert audio.state == "Built-in Audio HDMI"
     assert audio.attributes["options"] == ["Built-in Audio HDMI", "USB Audio Analog Stereo"]
 
+    mic = hass.states.get(f"select.{DEVICE_SLUG}_audio_input")
+    assert mic is not None
+    assert mic.state == "USB Audio Mono"
+    assert mic.attributes["options"] == ["USB Audio Mono", "ReSpeaker 4 Mic Array"]
+
     bar = hass.states.get(f"switch.{DEVICE_SLUG}_button_bar")
     assert bar is not None
     assert bar.state == "on"
@@ -103,6 +108,7 @@ async def test_absent_capabilities_create_no_entities(
     assert hass.states.get(f"select.{DEVICE_SLUG}_screen_saver_style") is None
     assert hass.states.get(f"number.{DEVICE_SLUG}_screen_saver_timeout") is None
     assert hass.states.get(f"select.{DEVICE_SLUG}_audio_output") is None
+    assert hass.states.get(f"select.{DEVICE_SLUG}_audio_input") is None
     assert hass.states.get(f"switch.{DEVICE_SLUG}_button_bar") is None
     # core entities are unaffected
     assert hass.states.get(f"switch.{DEVICE_SLUG}_dark_mode") is not None
@@ -238,7 +244,7 @@ async def test_audio_output_labels_stay_unique(
     """Two sinks with the same description (two identical USB DACs) stay
     tellable apart: the node name goes after the label."""
     state = copy.deepcopy(device_state)
-    state["audio"] = {
+    state["audio"]["output"] = {
         "current": "alsa_output.usb-a",
         "options": [
             {"name": "alsa_output.usb-a", "description": "USB Audio"},
@@ -254,3 +260,22 @@ async def test_audio_output_labels_stay_unique(
         "USB Audio (alsa_output.usb-b)",
     ]
     assert audio.state == "USB Audio (alsa_output.usb-a)"
+
+
+async def test_audio_input_unavailable_without_microphone(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """No microphone plugged in: the select still exists (so it fills in when
+    one is), but is unavailable rather than an empty dropdown."""
+    state = copy.deepcopy(device_state)
+    state["audio"]["input"] = {"current": "", "options": []}
+
+    await setup_device(hass, aioclient_mock, device_info, state)
+
+    mic = hass.states.get(f"select.{DEVICE_SLUG}_audio_input")
+    assert mic is not None
+    assert mic.state == "unavailable"
+    assert hass.states.get(f"select.{DEVICE_SLUG}_audio_output").state != "unavailable"
