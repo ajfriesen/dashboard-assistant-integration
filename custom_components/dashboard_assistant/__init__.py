@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from homeassistant.auth import EVENT_USER_UPDATED
 from homeassistant.const import (
     CONF_HOST,
     CONF_PORT,
@@ -21,7 +22,13 @@ from .api import (
     DashboardAssistantClient,
     DashboardAssistantError,
 )
-from .const import CONF_CERT_FINGERPRINT, CONF_LEGACY_HOME, HA_DEFAULT_PAGE, LOGGER
+from .const import (
+    CONF_CERT_FINGERPRINT,
+    CONF_KIOSK_USER_ID,
+    CONF_LEGACY_HOME,
+    HA_DEFAULT_PAGE,
+    LOGGER,
+)
 from .coordinator import (
     DashboardAssistantConfigEntry,
     DashboardAssistantCoordinator,
@@ -30,6 +37,7 @@ from .provision import (
     async_apply_legacy_home,
     async_deprovision_kiosk_login,
     async_ensure_kiosk_username,
+    async_kiosk_is_admin,
     async_provision_kiosk_login,
     kiosk_login_is_current,
 )
@@ -162,6 +170,34 @@ async def async_setup_entry(
     entry.async_on_unload(
         hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, _reprovision_if_needed)
     )
+    # Home Assistant's frontend reads the signed-in user once, when it loads,
+    # so when the owner makes the device's user an admin (or takes it away) the
+    # admin parts only show, or go, after a reload. Reload it then, and only
+    # when the admin flag actually changed, not on a rename.
+    if info.get("can_reload"):
+        admin = await async_kiosk_is_admin(hass, entry)
+
+        async def _reload_if_admin_changed(event: Event) -> None:
+            nonlocal admin
+            if event.data.get("user_id") != entry.data.get(CONF_KIOSK_USER_ID):
+                return
+            now = await async_kiosk_is_admin(hass, entry)
+            if now == admin:
+                return
+            admin = now
+            try:
+                await client.async_reload()
+            except DashboardAssistantError:
+                LOGGER.warning(
+                    "Could not reload the device's page after its user's admin "
+                    "rights changed; press Reload page",
+                    exc_info=True,
+                )
+
+        entry.async_on_unload(
+            hass.bus.async_listen(EVENT_USER_UPDATED, _reload_if_admin_changed)
+        )
+
     # Attempt immediately — the first refresh above already succeeded, so the
     # device is reachable and a healthy one is signed in before setup returns.
     await _ensure_kiosk_login()

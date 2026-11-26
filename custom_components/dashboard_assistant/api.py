@@ -377,6 +377,10 @@ class DashboardAssistantClient:
         """
         await self._request("POST", "/install_version", {"tag": tag})
 
+    async def async_reload(self) -> None:
+        """Load the page the kiosk browser is on again."""
+        await self._request("POST", "/reload", {})
+
     async def async_take_screenshot(self) -> None:
         await self._request("POST", "/screenshot")
 

@@ -7,8 +7,11 @@ import json
 from typing import Any
 
 import pytest
+from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+
+from custom_components.dashboard_assistant.const import CONF_KIOSK_USER_ID
 
 from .conftest import BASE, setup_device
 
@@ -360,3 +363,100 @@ async def test_a_start_not_below_the_stop_is_refused_with_a_reason(
             blocking=True,
         )
     assert err.value.translation_key == "charge_rejected"
+
+
+# --- reloading the page ------------------------------------------------------
+
+
+async def test_reload_button_drives_daemon(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any
+) -> None:
+    aioclient_mock.post(
+        f"{BASE}/reload",
+        json={"status": "reloading"},
+        headers={"Content-Type": "application/json"},
+    )
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": f"button.{DEVICE_SLUG}_reload_page"},
+        blocking=True,
+    )
+
+    assert [str(c[1]) for c in aioclient_mock.mock_calls][-1] == f"{BASE}/reload"
+
+
+def _reloads(aioclient_mock: Any) -> int:
+    return sum(1 for c in aioclient_mock.mock_calls if str(c[1]) == f"{BASE}/reload")
+
+
+async def _kiosk_user(hass: HomeAssistant, entry: Any) -> Any:
+    """The device's Home Assistant user, as provisioning records it.
+
+    A real Home Assistant has its owner already; without one the first user
+    created becomes the owner, and an owner is always an admin.
+    """
+    if not any(u.is_owner for u in await hass.auth.async_get_users()):
+        await hass.auth.async_create_user("Owner")
+    user = await hass.auth.async_create_user("Dashboard Assistant (d7bbb4)")
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_KIOSK_USER_ID: user.id}
+    )
+    return user
+
+
+async def test_making_the_device_user_an_admin_reloads_the_page(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any
+) -> None:
+    """Home Assistant's frontend reads the user once, when it loads, so the
+    admin parts only show after a reload."""
+    aioclient_mock.post(
+        f"{BASE}/reload",
+        json={"status": "reloading"},
+        headers={"Content-Type": "application/json"},
+    )
+    user = await _kiosk_user(hass, init_integration)
+
+    await hass.auth.async_update_user(user, group_ids=[GROUP_ID_ADMIN])
+    await hass.async_block_till_done()
+    assert _reloads(aioclient_mock) == 1
+
+    # A change that leaves the admin flag alone does not reload.
+    await hass.auth.async_update_user(user, name="Hallway")
+    await hass.async_block_till_done()
+    assert _reloads(aioclient_mock) == 1
+
+    # Taking it away reloads too, so the admin parts go.
+    await hass.auth.async_update_user(user, group_ids=[GROUP_ID_USER])
+    await hass.async_block_till_done()
+    assert _reloads(aioclient_mock) == 2
+
+
+async def test_another_users_admin_change_does_not_reload(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any
+) -> None:
+    await _kiosk_user(hass, init_integration)
+    other = await hass.auth.async_create_user("Someone else")
+
+    await hass.auth.async_update_user(other, group_ids=[GROUP_ID_ADMIN])
+    await hass.async_block_till_done()
+
+    assert _reloads(aioclient_mock) == 0
+
+
+async def test_an_os_without_reload_is_not_asked_to(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    info = {k: v for k, v in device_info.items() if k != "can_reload"}
+    entry = await setup_device(hass, aioclient_mock, info, device_state)
+    user = await _kiosk_user(hass, entry)
+
+    await hass.auth.async_update_user(user, group_ids=[GROUP_ID_ADMIN])
+    await hass.async_block_till_done()
+
+    assert _reloads(aioclient_mock) == 0
+    assert hass.states.get(f"button.{DEVICE_SLUG}_reload_page") is None

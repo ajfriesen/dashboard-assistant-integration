@@ -1,4 +1,4 @@
-"""Buttons: page navigation, power, screenshot, recovery."""
+"""Buttons: page navigation and reload, power, screenshot, recovery."""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ class DashboardAssistantButtonDescription(ButtonEntityDescription):
     """Logged before the command fires, for destructive actions."""
     removes_entry: bool = False
     """The command leaves this entry's token useless, so the entry goes too."""
+    supported_fn: Callable[[dict[str, Any]], bool] = lambda info: True
+    """Whether the device's OS has the command, from its info."""
 
 
 async def _roll_back(client: DashboardAssistantClient, data: dict[str, Any]) -> None:
@@ -68,6 +70,13 @@ BUTTONS: tuple[DashboardAssistantButtonDescription, ...] = (
         name="Previous page",
         icon="mdi:arrow-left-bold",
         press_fn=lambda client, data: client.async_set_page(direction="prev"),
+    ),
+    DashboardAssistantButtonDescription(
+        key="reload",
+        name="Reload page",
+        icon="mdi:refresh",
+        press_fn=lambda client, data: client.async_reload(),
+        supported_fn=lambda info: bool(info.get("can_reload")),
     ),
     DashboardAssistantButtonDescription(
         key="reboot",
@@ -117,7 +126,9 @@ async def async_setup_entry(
     """Set up the buttons."""
     coordinator = entry.runtime_data
     async_add_entities(
-        DashboardAssistantButton(coordinator, description) for description in BUTTONS
+        DashboardAssistantButton(coordinator, description)
+        for description in BUTTONS
+        if description.supported_fn(coordinator.info)
     )
 
 
