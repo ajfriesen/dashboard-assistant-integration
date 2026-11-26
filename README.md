@@ -48,6 +48,8 @@ You should see it here:
 
 [![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/?search=Dashboard+Assistant)
 
+A device on another network segment, such as a separate VLAN, is not discovered: mDNS does not cross between them. Add it by address instead: **Add integration → Dashboard Assistant**, and enter the IP address shown on the device's ⓘ screen.
+
 ### 3. Join the device
 
 Click **Add**, give it a name and area if needed and then **Add** again.

@@ -101,12 +101,28 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Devices are added from discovery, where they pair with no token typed.
+        """Add a device by its address, where discovery cannot reach it.
 
-        There is nothing to ask for here: the token never leaves the device
-        except through pairing.
+        mDNS stays inside one network segment, so a device on another VLAN is
+        never discovered. The address is all that is asked for: the token still
+        never leaves the device except through pairing.
         """
-        return self.async_abort(reason="discovery_only")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._host = user_input[CONF_HOST].strip()
+            self._port = DEFAULT_PORT
+            error = await self._async_identify(attempts=1)
+            if error is None:
+                return await self.async_step_zeroconf_confirm()
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_HOST, default=self._host or ""): str}
+            ),
+            errors=errors,
+        )
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
@@ -117,28 +133,38 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         self._name = discovery_info.name.removesuffix(
             "._dashboard-assistant._tcp.local."
         )
-
-        # Identify the device to key discovery on its stable node id — so every
-        # address it's announced at (IPv4/IPv6/…) and any later DHCP change map to
-        # one entry — and to title the card with its friendly name rather than the
-        # raw mDNS instance name ("Dashboard Assistant on <host>").
-        #
         # The device's API can be briefly unready right at boot, so retry a little.
-        # If it still can't be reached, abort instead of falling back to an
-        # address-based id: an address-keyed flow would not de-duplicate against
-        # the node-id one, showing a spurious second card. HA re-fires discovery
-        # when the device re-announces.
+        # If it still can't be reached, abort: HA re-fires discovery when the
+        # device re-announces.
+        error = await self._async_identify(attempts=3)
+        if error is not None:
+            return self.async_abort(reason=error)
+        return await self.async_step_zeroconf_confirm()
+
+    async def _async_identify(self, *, attempts: int) -> str | None:
+        """Identify the device at self._host, ready it for pairing.
+
+        Returns an error code, or None when the flow can go on to confirm.
+
+        Identify keys the flow on the device's stable node id — so every address
+        it's reached at (IPv4/IPv6/…, discovered or typed) and any later DHCP
+        change map to one entry — and titles the card with its friendly name
+        rather than the raw mDNS instance name ("Dashboard Assistant on <host>").
+        There is no fallback to an address-based id: an address-keyed flow would
+        not de-duplicate against the node-id one, showing a spurious second card.
+        """
+        assert self._host is not None
         ident = None
         session = async_get_clientsession(self.hass)
-        for attempt in range(3):
+        for attempt in range(attempts):
             try:
                 ident = await async_identify(session, self._host, self._port)
                 break
             except DashboardAssistantError:
-                if attempt < 2:
+                if attempt < attempts - 1:
                     await asyncio.sleep(2)
         if not ident or not ident.get("node_id"):
-            return self.async_abort(reason="cannot_connect")
+            return "cannot_connect"
 
         self._name = ident.get("name") or self._name
 
@@ -146,7 +172,7 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
         # long-lived Home Assistant credential, so neither may cross the network
         # in the clear. A device that offers no TLS is not offered at all.
         if not ident.get("tls_port"):
-            return self.async_abort(reason="tls_required")
+            return "tls_required"
         self._port = int(ident["tls_port"])
         # Read the certificate now, so a device whose TLS listener is not
         # answering does not get a card that can never pair.
@@ -155,18 +181,18 @@ class DashboardAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
                 self.hass, self._host, self._port
             )
         except DashboardAssistantError:
-            return self.async_abort(reason="cannot_connect")
+            return "cannot_connect"
 
         await self.async_set_unique_id(ident["node_id"])
-        # Deliberately NOT updating the fingerprint here. This path rewrites entry
-        # data on rediscovery with no user interaction, so a spoofed mDNS record
-        # could otherwise silently re-pin a configured device. A device whose
+        # Deliberately NOT updating the fingerprint here. Rediscovery rewrites
+        # entry data with no user interaction, so a spoofed mDNS record could
+        # otherwise silently re-pin a configured device. A device whose
         # certificate really changed (a factory reset) is deleted and re-added.
         self._abort_if_unique_id_configured(
             updates={CONF_HOST: self._host, CONF_PORT: self._port}
         )
         self.context["title_placeholders"] = {"name": self._name or self._host}
-        return await self.async_step_zeroconf_confirm()
+        return None
 
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None
