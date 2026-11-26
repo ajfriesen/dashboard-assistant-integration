@@ -105,6 +105,40 @@ async def test_display_light_drives_daemon(
     assert body["brightness"] == 100
 
 
+async def test_audio_output_select_drives_daemon(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
+) -> None:
+    """The select shows descriptions and sends the sink's node name."""
+    aioclient_mock.post(f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"})
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": f"select.{DEVICE_SLUG}_audio_output", "option": "USB Audio Analog Stereo"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {
+        "output": "alsa_output.usb-Generic_USB_Audio-00.analog-stereo"
+    }
+
+
+async def test_audio_input_select_drives_daemon(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
+) -> None:
+    """The input select sends the source's node name as "input"."""
+    aioclient_mock.post(f"{BASE}/audio", json=device_state, headers={"Content-Type": "application/json"})
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": f"select.{DEVICE_SLUG}_audio_input", "option": "ReSpeaker 4 Mic Array"},
+        blocking=True,
+    )
+    assert last_request_json(aioclient_mock) == {
+        "input": "alsa_input.usb-Seeed_ReSpeaker-00.multichannel-input"
+    }
+
+
 async def test_dark_mode_switch_drives_daemon(
     hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
 ) -> None:

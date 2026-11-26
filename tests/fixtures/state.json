@@ -133,6 +133,34 @@
   "bar": {
     "visible": true
   },
+  "audio": {
+    "output": {
+      "current": "alsa_output.platform-hdmi.hdmi-stereo",
+      "options": [
+        {
+          "name": "alsa_output.platform-hdmi.hdmi-stereo",
+          "description": "Built-in Audio HDMI"
+        },
+        {
+          "name": "alsa_output.usb-Generic_USB_Audio-00.analog-stereo",
+          "description": "USB Audio Analog Stereo"
+        }
+      ]
+    },
+    "input": {
+      "current": "alsa_input.usb-Generic_USB_Audio-00.mono-fallback",
+      "options": [
+        {
+          "name": "alsa_input.usb-Generic_USB_Audio-00.mono-fallback",
+          "description": "USB Audio Mono"
+        },
+        {
+          "name": "alsa_input.usb-Seeed_ReSpeaker-00.multichannel-input",
+          "description": "ReSpeaker 4 Mic Array"
+        }
+      ]
+    }
+  },
   "rotation": {
     "current": 0,
     "options": [

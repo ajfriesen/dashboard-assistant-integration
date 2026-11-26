@@ -1,4 +1,4 @@
-"""Page, display-rotation, screen saver, and OS version selectors."""
+"""Page, display-rotation, audio output and input, screen saver, and OS version selectors."""
 
 from __future__ import annotations
 
@@ -26,6 +26,12 @@ async def async_setup_entry(
     ]
     if "screensaver" in coordinator.data:
         entities.append(ScreensaverSelect(coordinator))
+    # No audio stack, or an OS build from before the selects: create nothing.
+    if "audio" in coordinator.data:
+        entities += [
+            AudioSelect(coordinator, "output", "Audio output", "mdi:speaker"),
+            AudioSelect(coordinator, "input", "Audio input", "mdi:microphone"),
+        ]
     # The version picker only makes sense where the image can apply switches,
     # matching how the update entity gates its Install button. .get chain: a
     # daemon that reports no "update" block must not abort the platform.
@@ -81,6 +87,56 @@ class RotationSelect(DashboardAssistantEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         degrees = int(option.rstrip("°"))
         snapshot = await self.coordinator.client.async_set_rotation(degrees)
+        await self._run_command(snapshot)
+
+
+class AudioSelect(DashboardAssistantEntity, SelectEntity):
+    """One side of the device's sound: the output (PipeWire's default sink,
+    which the Sendspin player and sound from the dashboard play to) or the
+    input (its default source, which a voice assistant records from).
+
+    The device lists each sink or source as a node name (what it takes back)
+    and a description (what a person reads). The dropdown shows descriptions;
+    two with the same one get their node name added, so they stay apart.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator, side: str, name: str, icon: str) -> None:
+        super().__init__(coordinator, f"audio_{side}")
+        self._side = side
+        self._attr_name = name
+        self._attr_icon = icon
+
+    def _labels(self) -> dict[str, str]:
+        """Label shown in the dropdown, by node name."""
+        devices = self.data["audio"][self._side]["options"]
+        counts: dict[str, int] = {}
+        for device in devices:
+            counts[device["description"]] = counts.get(device["description"], 0) + 1
+        return {
+            device["name"]: device["description"]
+            if counts[device["description"]] == 1
+            else f"{device['description']} ({device['name']})"
+            for device in devices
+        }
+
+    @property
+    def available(self) -> bool:
+        # Nothing to pick from, e.g. no microphone plugged in.
+        return super().available and bool(self.data["audio"][self._side]["options"])
+
+    @property
+    def options(self) -> list[str]:
+        return list(self._labels().values())
+
+    @property
+    def current_option(self) -> str | None:
+        return self._labels().get(self.data["audio"][self._side]["current"])
+
+    async def async_select_option(self, option: str) -> None:
+        name = next(n for n, label in self._labels().items() if label == option)
+        snapshot = await self.coordinator.client.async_set_audio(**{self._side: name})
         await self._run_command(snapshot)
 
 
