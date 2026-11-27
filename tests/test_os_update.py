@@ -90,3 +90,22 @@ async def test_a_daemon_that_reports_no_version_does_not_reload(
     await hass.async_block_till_done()
 
     assert info_requests(aioclient_mock) == before
+
+
+async def test_versions_that_keep_disagreeing_reload_only_once(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    device_info: dict[str, Any],
+    device_state: dict[str, Any],
+) -> None:
+    """A live update that leaves the daemon running: its release checker still
+    reports the version it started with, while the device info reads the new
+    one. Reloading cannot settle that, so it must not repeat."""
+    info, _ = at_version(device_info, device_state, "1.3.1")
+    _, state = at_version(device_info, device_state, "1.2.0")
+    entry = await setup_device(hass, aioclient_mock, info, state)
+    for _ in range(3):
+        entry.runtime_data.async_set_updated_data(copy.deepcopy(state))
+        await hass.async_block_till_done()
+
+    assert info_requests(aioclient_mock) <= 2  # setup, and one reload

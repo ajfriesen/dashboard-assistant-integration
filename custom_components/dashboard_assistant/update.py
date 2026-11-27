@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.update import (
@@ -18,6 +19,11 @@ from .coordinator import DashboardAssistantConfigEntry
 from .entity import DashboardAssistantEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+_DEFAULT_REPO = "https://github.com/ajfriesen/DashboardAssistant"
+_GITHUB_RELEASE = re.compile(
+    r"^(?P<repo>https://github\.com/[^/]+/[^/]+)/releases/tag/(?P<tag>[^/?#]+)$"
+)
 
 
 async def async_setup_entry(
@@ -65,7 +71,24 @@ class SystemUpdate(DashboardAssistantEntity, UpdateEntity):
 
     @property
     def release_url(self) -> str | None:
-        return self._update.get("release_url") or None
+        """The changelog at the offered release, rather than that release's page.
+
+        A release's notes list only what changed since the tag before it,
+        promoted or not: updating 1.2.0 -> 1.3.1 skipped the never-promoted
+        1.3.0, whose changes the 1.3.1 page left out. The changelog at the
+        offered tag lists every release up to it. A GitHub release link names
+        the device's release source; without one, the project's is assumed.
+        """
+        url = self._update.get("release_url") or None
+        latest = self.latest_version
+        if url:
+            match = _GITHUB_RELEASE.match(url)
+            if not match:
+                return url
+            return f"{match['repo']}/blob/{match['tag']}/CHANGELOG.md"
+        if latest:
+            return f"{_DEFAULT_REPO}/blob/v{latest.removeprefix('v')}/CHANGELOG.md"
+        return None
 
     @property
     def title(self) -> str | None:
