@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.update import (
@@ -12,8 +13,11 @@ from homeassistant.components.update import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .api import DashboardAssistantError
 from .coordinator import DashboardAssistantConfigEntry
 from .entity import DashboardAssistantEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -69,6 +73,20 @@ class SystemUpdate(DashboardAssistantEntity, UpdateEntity):
 
     def release_notes(self) -> str | None:
         return self._update.get("release_summary") or None
+
+    async def async_update(self) -> None:
+        """Ask the device to check for releases, then re-read its state.
+
+        Home Assistant calls this for Settings -> Updates -> Check for updates
+        (homeassistant.update_entity). A plain refresh would only re-read what
+        the device already knows, and it fetches releases on its own schedule,
+        so the menu item would change nothing.
+        """
+        try:
+            await self.coordinator.client.async_check_updates()
+        except DashboardAssistantError as err:
+            _LOGGER.debug("check for updates failed: %s", err)
+        await super().async_update()
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
