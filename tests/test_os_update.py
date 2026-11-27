@@ -74,19 +74,19 @@ async def test_snapshots_from_the_same_release_do_not_reload(
     assert info_requests(aioclient_mock) == before
 
 
-async def test_a_snapshot_without_a_version_does_not_reload(
+async def test_a_daemon_that_reports_no_version_does_not_reload(
     hass: HomeAssistant,
     aioclient_mock: Any,
     device_info: dict[str, Any],
     device_state: dict[str, Any],
 ) -> None:
+    """An OS build from before update checks sends no update block at all."""
     info, state = at_version(device_info, device_state, "1.3.1")
+    state.pop("update")
     entry = await setup_device(hass, aioclient_mock, info, state)
     before = info_requests(aioclient_mock)
 
-    bare = copy.deepcopy(state)
-    bare.pop("update")
-    entry.runtime_data.async_set_updated_data(bare)
+    entry.runtime_data.async_set_updated_data(copy.deepcopy(state))
     await hass.async_block_till_done()
 
     assert info_requests(aioclient_mock) == before
