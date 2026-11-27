@@ -8,6 +8,13 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.2.2](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.2.1...v1.2.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* pick up a device's new version and entities after an OS update ([#44](https://github.com/ajfriesen/dashboard-assistant-integration/issues/44)) ([b126a29](https://github.com/ajfriesen/dashboard-assistant-integration/commit/b126a29a547c678340bcb3dbe1ce3f0ae1f4037b))
+
 ## [1.2.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.2.0...v1.2.1) (2026-11-27)
 
 
