@@ -364,6 +364,14 @@ class DashboardAssistantClient:
         """Boot an earlier generation; the device switches to it and reboots."""
         await self._request("POST", "/rollback", {"generation": generation})
 
+    async def async_check_updates(self) -> None:
+        """Have the device check its release source now, not on its schedule.
+
+        The device answers once the check is done, which is a round trip to
+        GitHub on its side, so this allows longer than the default timeout.
+        """
+        await self._request("POST", "/check_updates", timeout=30)
+
     async def async_install_update(self) -> None:
         await self._request("POST", "/update")
 

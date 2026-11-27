@@ -10,6 +10,7 @@ import pytest
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.setup import async_setup_component
 
 from custom_components.dashboard_assistant.const import CONF_KIOSK_USER_ID
 
@@ -460,3 +461,33 @@ async def test_an_os_without_reload_is_not_asked_to(
 
     assert _reloads(aioclient_mock) == 0
     assert hass.states.get(f"button.{DEVICE_SLUG}_reload_page") is None
+
+
+# --- checking for updates ----------------------------------------------------
+
+
+async def test_check_for_updates_asks_the_device_to_check(
+    hass: HomeAssistant, init_integration: Any, aioclient_mock: Any, device_state: Any
+) -> None:
+    """Settings -> Updates -> Check for updates refreshes every update entity.
+
+    Re-reading the device's state is not enough: it only knows releases it has
+    fetched, and it fetches them on its own schedule. So the update entity asks
+    the device to check its release source first, the way a user expects that
+    menu item to work.
+    """
+    assert await async_setup_component(hass, "homeassistant", {})
+    aioclient_mock.post(
+        f"{BASE}/check_updates",
+        json={"installed_version": "1.3.0", "latest_version": "1.3.0"},
+        headers={"Content-Type": "application/json"},
+    )
+
+    await hass.services.async_call(
+        "homeassistant",
+        "update_entity",
+        {"entity_id": f"update.{DEVICE_SLUG}_system_update"},
+        blocking=True,
+    )
+
+    assert f"{BASE}/check_updates" in [str(c[1]) for c in aioclient_mock.mock_calls]
