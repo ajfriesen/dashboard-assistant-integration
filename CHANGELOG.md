@@ -8,6 +8,24 @@ commit messages rather than editing released sections by hand.
 `0.1.0` is the documented starting point; automated releases begin with the next
 version.
 
+## [1.2.0](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.2.0-rc.1...v1.2.0) (2026-11-26)
+
+
+### Features
+
+* add a Button bar switch to hide the kiosk's bottom bar ([#35](https://github.com/ajfriesen/dashboard-assistant-integration/issues/35)) ([46b373a](https://github.com/ajfriesen/dashboard-assistant-integration/commit/46b373a8c6caf7e768239985e34acc3db792d74b))
+* add a device by its address, for networks mDNS doesn't reach ([#39](https://github.com/ajfriesen/dashboard-assistant-integration/issues/39)) ([4a45020](https://github.com/ajfriesen/dashboard-assistant-integration/commit/4a4502082199a5a508a8d07cc7f78d24b338fcae))
+* add a Reload page button, and reload when the device's user becomes an admin ([#41](https://github.com/ajfriesen/dashboard-assistant-integration/issues/41)) ([6df9950](https://github.com/ajfriesen/dashboard-assistant-integration/commit/6df995024e5d537819044528cbad5b7fcfcda890))
+* add a Screen saver brightness number ([#38](https://github.com/ajfriesen/dashboard-assistant-integration/issues/38)) ([0a4c447](https://github.com/ajfriesen/dashboard-assistant-integration/commit/0a4c447ce1e2559bb8344b2cfdfcaa083d5ca4bd))
+* add Audio output and Audio input selects (needs Dashboard Assistant OS 1.3.0) ([46c0353](https://github.com/ajfriesen/dashboard-assistant-integration/commit/46c0353deb306358771af453088e97c703781ffa))
+* add Charge start and Charge stop numbers ([#40](https://github.com/ajfriesen/dashboard-assistant-integration/issues/40)) ([b4155b1](https://github.com/ajfriesen/dashboard-assistant-integration/commit/b4155b1fcd27eb4229ff125d481dca6ccba0572e))
+* set the device's time zone and language from the options ([#33](https://github.com/ajfriesen/dashboard-assistant-integration/issues/33)) ([0a7453e](https://github.com/ajfriesen/dashboard-assistant-integration/commit/0a7453e690a3d65836c036a3bf0dc189ab9405cf))
+
+
+### Miscellaneous
+
+* hold every release as a candidate, drop rc versions ([cfa6c5f](https://github.com/ajfriesen/dashboard-assistant-integration/commit/cfa6c5fec48df2a7bb160acd86fb6c539ad08af2))
+
 ## [1.2.0-rc.1](https://github.com/ajfriesen/dashboard-assistant-integration/compare/v1.1.0...v1.2.0-rc.1) (2026-11-12)
 
 
