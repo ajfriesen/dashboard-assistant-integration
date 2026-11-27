@@ -20,6 +20,10 @@ from .const import DOMAIN, LOGGER, POLL_INTERVAL
 type DashboardAssistantConfigEntry = ConfigEntry[DashboardAssistantCoordinator]
 
 
+# hass.data key: entry id -> the running version the entry was last reloaded for.
+DOMAIN_RELOADED_FOR = f"{DOMAIN}_reloaded_for"
+
+
 class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Holds the latest device snapshot, refreshed by SSE and a poll fallback."""
 
@@ -78,6 +82,14 @@ class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         running = ((self.data or {}).get("update") or {}).get("installed_version")
         if self._reload_scheduled or not running or running == self.info.get("version"):
             return
+        # At most one reload per running version. After a live update that left
+        # the daemon running, its release checker still reports the version it
+        # started with while the info reads the new one; a reload cannot settle
+        # that, and repeating it would reload the entry for ever.
+        reloaded_for = self.hass.data.setdefault(DOMAIN_RELOADED_FOR, {})
+        if reloaded_for.get(self.config_entry.entry_id) == running:
+            return
+        reloaded_for[self.config_entry.entry_id] = running
         LOGGER.info(
             "Device now runs %s (was %s at setup); reloading to pick up its changes",
             running,
