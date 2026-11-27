@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -42,6 +42,7 @@ class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.info = info
         self._sse_task: asyncio.Task[None] | None = None
+        self._reload_scheduled = False
 
     @property
     def node_id(self) -> str:
@@ -57,6 +58,33 @@ class DashboardAssistantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise ConfigEntryError(str(err)) from err
         except DashboardAssistantError as err:
             raise UpdateFailed(str(err)) from err
+
+    @callback
+    def async_update_listeners(self) -> None:
+        """Hand entities the new snapshot, then catch up with an OS update."""
+        super().async_update_listeners()
+        self._reload_after_os_update()
+
+    @callback
+    def _reload_after_os_update(self) -> None:
+        """Reload the entry once the device runs another release than at setup.
+
+        The device's version and capabilities (self.info) are read once, at
+        setup, and decide which entities exist. An OS update changes them while
+        Home Assistant keeps running, so without a reload it went on showing the
+        old version and none of the new entities. Every OS release reports the
+        running version in each snapshot, from the same source as the info's.
+        """
+        running = ((self.data or {}).get("update") or {}).get("installed_version")
+        if self._reload_scheduled or not running or running == self.info.get("version"):
+            return
+        LOGGER.info(
+            "Device now runs %s (was %s at setup); reloading to pick up its changes",
+            running,
+            self.info.get("version"),
+        )
+        self._reload_scheduled = True
+        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
     def start_stream(self) -> None:
         """Launch the background SSE loop tied to the config entry's lifetime."""
